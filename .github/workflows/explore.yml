@@ -12,16 +12,6 @@ on:
         required: true
         type: string
         default: 'shusky'
-      android_version:
-        description: 'Android version for GKI branch (e.g., 15)'
-        required: true
-        type: string
-        default: '15'
-      kernel_version:
-        description: 'Kernel version for GKI branch (e.g., 6.1)'
-        required: true
-        type: string
-        default: '6.1'
 
 jobs:
   build-kernel:
@@ -37,7 +27,6 @@ jobs:
           remove-docker-images: 'true'
           verbose: 'true'
 
-      # --- ИЗМЕНЕНИЕ: Скачиваем исходники ядра и repo ---
       - name: Download AOSP Kernel Sources
         run: |
           mkdir -p ~/bin
@@ -47,23 +36,23 @@ jobs:
           git config --global user.name "Builder"
           git config --global user.email "builder@github-actions"
 
-          # Создаем рабочую директорию для чистоты
           mkdir workspace
           cd workspace
           
-          # Используем repo для скачивания AOSP-структуры
           echo "Initializing repo for kernel sources..."
           repo init -u https://android.googlesource.com/kernel/manifest -b android-gs-shusky-6.1-android15-qpr2-beta --depth=1
           echo "Syncing sources... This may take a while."
           repo sync -c -j$(nproc) --no-tags
 
-      # --- ИЗМЕНЕНИЕ: Клонируем ваши зависимости РЯДОМ с исходниками ядра ---
       - name: Clone AnyKernel3 and Other Dependencies
         run: |
           echo "Cloning AnyKernel3, susfs, and patch repositories..."
           
+          # --- Используем ветку из исходного скрипта для AnyKernel3 ---
           ANYKERNEL_BRANCH="15.0.0-sultan-${{ inputs.codename }}"
-          SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
+          
+          # --- Используем фиксированную ветку для susfs ---
+          SUSFS_BRANCH="gki-android14-6.1"
 
           echo "Using AnyKernel3 branch: $ANYKERNEL_BRANCH"
           echo "Using SUSFS branch: $SUSFS_BRANCH"
@@ -72,14 +61,11 @@ jobs:
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
           git clone https://github.com/TheWildJames/kernel_patches.git
 
-      # --- ИЗМЕНЕНИЕ: Вся ваша логика патчинга, но с указанием правильной рабочей директории ---
       - name: Add KernelSU, Prepare and Patch Kernel
-        working-directory: ./workspace/aosp # <--- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ!
+        working-directory: ./workspace/aosp
         run: |
-          # Этот блок полностью ваш, он должен теперь работать,
-          # так как выполняется внутри директории с исходниками ядра (`aosp`).
-          # Пути вида ../susfs4ksu теперь должны быть ../../susfs4ksu. Я их поправил.
-
+          # --- Этот блок остается вашим, с исправленными путями ---
+          
           # Adding KernelSU-Next
           echo "Adding KernelSU..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
@@ -92,13 +78,13 @@ jobs:
 
           # Applying the main SUSFS patch to the kernel
           echo "Applying main SUSFS patch set to kernel tree (ignoring expected sys.c failure)..."
-          patch -p1 < ../../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          patch -p1 < ../../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
           
-          # Integration of SUSFS with KernelSU-Next (FAILURES ARE EXPECTED) and their FIX
+          # Integration of SUSFS with KernelSU-Next
           echo "Entering KernelSU-Next directory..."
           cd ./KernelSU-Next
           
-          echo "Applying original (outdated) SUSFS integration patch, failures are expected..."
+          echo "Applying original SUSFS integration patch, failures are expected..."
           cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
           patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
 
@@ -133,9 +119,7 @@ jobs:
              patch -p1 -F 3 < 69_hide_stuff.patch
           fi
 
-      # --- ДОБАВЛЕНО: Шаг для отладки ---
       - name: Setup tmate session for debugging
         uses: mxschmitt/action-tmate@v3
         with:
-          # При подключении вы сразу окажетесь в папке с ядром
           working-directory: ./workspace/aosp
