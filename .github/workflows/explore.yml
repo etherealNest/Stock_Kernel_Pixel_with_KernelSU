@@ -1,15 +1,32 @@
-name: Explore Kernel Sources via SSH
+name: Build AOSP Kernel with Sultan Patches
+
+permissions:
+  contents: write
+  actions: write
 
 on:
-  workflow_dispatch: # Позволяет запускать workflow вручную из вкладки "Actions"
+  workflow_dispatch:
+    inputs:
+      codename:
+        description: 'Device codename (e.g., shusky)'
+        required: true
+        type: string
+        default: 'shusky'
+      android_version:
+        description: 'Android version for GKI branch (e.g., 15)'
+        required: true
+        type: string
+        default: '15'
+      kernel_version:
+        description: 'Kernel version for GKI branch (e.g., 6.1)'
+        required: true
+        type: string
+        default: '6.1'
 
 jobs:
-  download-and-connect:
-    runs-on: ubuntu-latest # Используем стандартную виртуальную машину
-    
+  build-kernel:
+    runs-on: ubuntu-latest
     steps:
-      # Шаг 1: Увеличиваем доступное место, удаляя ненужное ПО.
-      # Это хороший шаг, чтобы избежать проблем с нехваткой места при скачивании.
       - name: Maximize Build Space
         uses: AdityaGarg8/remove-unwanted-software@v5
         with:
@@ -18,40 +35,107 @@ jobs:
           remove-haskell: 'true'
           remove-codeql: 'true'
           remove-docker-images: 'true'
-          
-      # Шаг 2: Установка инструмента 'repo'.
-      # Он нужен для работы с манифестами Android.
-      - name: Install repo tool
+          verbose: 'true'
+
+      # --- ИЗМЕНЕНИЕ: Скачиваем исходники ядра и repo ---
+      - name: Download AOSP Kernel Sources
         run: |
-          # Создаем директорию для утилит и добавляем ее в PATH
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
-          
-          # 'repo' требует, чтобы Git был настроен
-          git config --global user.name "Explorer"
-          git config --global user.email "explorer@github-actions"
+          git config --global user.name "Builder"
+          git config --global user.email "builder@github-actions"
 
-      # Шаг 3: Скачивание исходников ядра.
-      # Создаем отдельную директорию для чистоты.
-      - name: Download Kernel Sources with repo
-        run: |
-          mkdir kernel_sources
-          cd kernel_sources
+          # Создаем рабочую директорию для чистоты
+          mkdir workspace
+          cd workspace
           
-          echo "Initializing repo..."
+          # Используем repo для скачивания AOSP-структуры
+          echo "Initializing repo for kernel sources..."
           repo init -u https://android.googlesource.com/kernel/manifest -b android-gs-shusky-6.1-android15-qpr2-beta --depth=1
-          
           echo "Syncing sources... This may take a while."
-          # -c (current branch) и --no-tags для экономии времени и места
-          repo sync -c --no-tags -j$(nproc)
+          repo sync -c -j$(nproc) --no-tags
 
-      # Шаг 4: Предоставление SSH-доступа с помощью tmate.
-      # Workflow остановится на этом шаге и будет ждать вашего подключения.
+      # --- ИЗМЕНЕНИЕ: Клонируем ваши зависимости РЯДОМ с исходниками ядра ---
+      - name: Clone AnyKernel3 and Other Dependencies
+        run: |
+          echo "Cloning AnyKernel3, susfs, and patch repositories..."
+          
+          ANYKERNEL_BRANCH="15.0.0-sultan-${{ inputs.codename }}"
+          SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
+
+          echo "Using AnyKernel3 branch: $ANYKERNEL_BRANCH"
+          echo "Using SUSFS branch: $SUSFS_BRANCH"
+
+          git clone https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
+          git clone https://github.com/TheWildJames/kernel_patches.git
+
+      # --- ИЗМЕНЕНИЕ: Вся ваша логика патчинга, но с указанием правильной рабочей директории ---
+      - name: Add KernelSU, Prepare and Patch Kernel
+        working-directory: ./workspace/aosp # <--- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ!
+        run: |
+          # Этот блок полностью ваш, он должен теперь работать,
+          # так как выполняется внутри директории с исходниками ядра (`aosp`).
+          # Пути вида ../susfs4ksu теперь должны быть ../../susfs4ksu. Я их поправил.
+
+          # Adding KernelSU-Next
+          echo "Adding KernelSU..."
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+          
+          # Copy SUSFS Source Files
+          echo "Copying SUSFS source files..."
+          cp ../../susfs4ksu/kernel_patches/fs/susfs.c ./fs/
+          cp ../../susfs4ksu/kernel_patches/include/linux/susfs.h ./include/linux/
+          cp ../../susfs4ksu/kernel_patches/include/linux/susfs_def.h ./include/linux/
+
+          # Applying the main SUSFS patch to the kernel
+          echo "Applying main SUSFS patch set to kernel tree (ignoring expected sys.c failure)..."
+          patch -p1 < ../../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          
+          # Integration of SUSFS with KernelSU-Next (FAILURES ARE EXPECTED) and their FIX
+          echo "Entering KernelSU-Next directory..."
+          cd ./KernelSU-Next
+          
+          echo "Applying original (outdated) SUSFS integration patch, failures are expected..."
+          cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+          patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
+
+          echo "Applying official compatibility fixes for SUSFS v1.5.9..."
+          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_apk_sign.c.patch
+          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_core_hook.c.patch
+          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_selinux.c.patch
+          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_ksud.c.patch
+          
+          if [ -f ../../../kernel_patches/next/fix_sucompat.c.patch ]; then
+            patch -p1 --forward < ../../../kernel_patches/next/fix_sucompat.c.patch
+          fi
+
+          # Return and apply remaining patches
+          echo "Returning to kernel root directory..."
+          cd ..
+
+          echo "Applying final compatibility fix for sys.c..."
+          if [ -f ../../kernel_patches/sultan/sys.c_fix.patch ]; then
+              patch -p1 --fuzz=3 < ../../kernel_patches/sultan/sys.c_fix.patch
+          fi
+
+          echo "Applying KSU Hooks..."
+          if [ -f ../../kernel_patches/next/syscall_hooks.patch ]; then
+              cp ../../kernel_patches/next/syscall_hooks.patch ./
+              patch -p1 --fuzz=3 < ./syscall_hooks.patch
+          fi
+          
+          echo "Applying Hide Stuff Patches..."
+          if [ -f ../../kernel_patches/69_hide_stuff.patch ]; then
+             cp ../../kernel_patches/69_hide_stuff.patch ./
+             patch -p1 -F 3 < 69_hide_stuff.patch
+          fi
+
+      # --- ДОБАВЛЕНО: Шаг для отладки ---
       - name: Setup tmate session for debugging
         uses: mxschmitt/action-tmate@v3
         with:
-          # Указываем рабочую директорию, чтобы при подключении
-          # вы сразу оказались в папке с исходниками.
-          working-directory: kernel_sources
+          # При подключении вы сразу окажетесь в папке с ядром
+          working-directory: ./workspace/aosp
