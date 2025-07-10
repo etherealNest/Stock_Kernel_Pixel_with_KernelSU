@@ -1,0 +1,57 @@
+name: Explore Kernel Sources via SSH
+
+on:
+  workflow_dispatch: # Позволяет запускать workflow вручную из вкладки "Actions"
+
+jobs:
+  download-and-connect:
+    runs-on: ubuntu-latest # Используем стандартную виртуальную машину
+    
+    steps:
+      # Шаг 1: Увеличиваем доступное место, удаляя ненужное ПО.
+      # Это хороший шаг, чтобы избежать проблем с нехваткой места при скачивании.
+      - name: Maximize Build Space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+          
+      # Шаг 2: Установка инструмента 'repo'.
+      # Он нужен для работы с манифестами Android.
+      - name: Install repo tool
+        run: |
+          # Создаем директорию для утилит и добавляем ее в PATH
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+          
+          # 'repo' требует, чтобы Git был настроен
+          git config --global user.name "Explorer"
+          git config --global user.email "explorer@github-actions"
+
+      # Шаг 3: Скачивание исходников ядра.
+      # Создаем отдельную директорию для чистоты.
+      - name: Download Kernel Sources with repo
+        run: |
+          mkdir kernel_sources
+          cd kernel_sources
+          
+          echo "Initializing repo..."
+          repo init -u https://android.googlesource.com/kernel/manifest -b android-gs-shusky-6.1-android15-qpr2-beta --depth=1
+          
+          echo "Syncing sources... This may take a while."
+          # -c (current branch) и --no-tags для экономии времени и места
+          repo sync -c --no-tags -j$(nproc)
+
+      # Шаг 4: Предоставление SSH-доступа с помощью tmate.
+      # Workflow остановится на этом шаге и будет ждать вашего подключения.
+      - name: Setup tmate session for debugging
+        uses: mxschmitt/action-tmate@v3
+        with:
+          # Указываем рабочую директорию, чтобы при подключении
+          # вы сразу оказались в папке с исходниками.
+          working-directory: kernel_sources
