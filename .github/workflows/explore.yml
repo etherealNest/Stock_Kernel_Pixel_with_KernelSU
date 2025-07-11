@@ -1,49 +1,56 @@
-      - name: Install Repo Tool
+name: Debug Kernel Source via SSH
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug-session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60 # Таймаут сессии отладки
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Maximize Build Space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+          remove-large-packages: 'true'
+          remove-swapfile: 'true'
+
+      - name: Install Repo
         run: |
-          # Создаем директорию для бинарных файлов и добавляем ее в PATH
-          mkdir -p ${{ github.workspace }}/bin
-          echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
-          
-          # Скачиваем и устанавливаем утилиту repo
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ${{ github.workspace }}/bin/repo
-          chmod a+x ${{ github.workspace }}/bin/repo
+          mkdir -p .bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > .bin/repo
+          chmod a+x .bin/repo
+          echo "$GITHUB_WORKSPACE/.bin" >> $GITHUB_PATH
 
       - name: Initialize and Sync Kernel Source
         run: |
-          # Задаем переменные
           KERNEL_DIR="kernel_source"
           MANIFEST_URL="https://android.googlesource.com/kernel/manifest"
           MANIFEST_BRANCH="android-gs-shusky-6.1-android16"
           
-          # Создаем и переходим в директорию для исходников
           mkdir -p "$KERNEL_DIR"
           cd "$KERNEL_DIR"
           
-          echo "Initializing repo with branch: $MANIFEST_BRANCH"
+          echo "Initializing repo..."
           repo init --depth=1 -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH"
-          
-          # Проверяем, не является ли ветка устаревшей (deprecated)
-          REMOTE_BRANCH_STATUS=$(git ls-remote --heads "$MANIFEST_URL" "refs/heads/$MANIFEST_BRANCH")
-          DEFAULT_MANIFEST_PATH=".repo/manifests/default.xml"
-          
-          # Если git ls-remote не находит точную ветку, предполагаем, что она может быть deprecated
-          if [ -z "$REMOTE_BRANCH_STATUS" ]; then
-            echo "Branch '$MANIFEST_BRANCH' not found. Checking for 'deprecated/$MANIFEST_BRANCH'."
-            # Изменяем манифест для использования deprecated пути
-            sed -i "s|\"refs/heads/${MANIFEST_BRANCH}\"|\"refs/heads/deprecated/${MANIFEST_BRANCH}\"|g" "$DEFAULT_MANIFEST_PATH"
-            
-            # Проверяем изменения
-            echo "Manifest updated to use deprecated branch path."
-            grep "deprecated" "$DEFAULT_MANIFEST_PATH"
-          fi
           
           echo "Syncing kernel source..."
           repo sync -c -j$(nproc --all) --no-tags --fail-fast
-        
-      - name: Verify Source Code Structure
-        run: |
-          echo "Kernel source synced into 'kernel_source' directory."
-          echo "Directory structure:"
-          ls -lA kernel_source
-          echo "Common kernel directory:"
-          ls -lA kernel_source/common
+          
+          echo "Sync complete. Source code is in $GITHUB_WORKSPACE/$KERNEL_DIR"
+
+      - name: Setup SSH session for debugging
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
