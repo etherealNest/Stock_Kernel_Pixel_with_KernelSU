@@ -1,128 +1,49 @@
-name: Build AOSP Kernel with Sultan Patches
-
-permissions:
-  contents: write
-  actions: write
-
-on:
-  workflow_dispatch:
-    inputs:
-      codename:
-        description: 'Device codename (e.g., shusky)'
-        required: true
-        type: string
-        default: 'shusky'
-
-jobs:
-  build-kernel:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Maximize Build Space
-        uses: AdityaGarg8/remove-unwanted-software@v5
-        with:
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
-          verbose: 'true'
-
-      # --- ИСПРАВЛЕНИЕ: Шаг 1 - Установка инструментов ---
-      - name: Install repo tool and configure Git
+      - name: Install Repo Tool
         run: |
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
-          echo "$HOME/bin" >> $GITHUB_PATH
-          git config --global user.name "Builder"
-          git config --global user.email "builder@github-actions"
+          # Создаем директорию для бинарных файлов и добавляем ее в PATH
+          mkdir -p ${{ github.workspace }}/bin
+          echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+          
+          # Скачиваем и устанавливаем утилиту repo
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ${{ github.workspace }}/bin/repo
+          chmod a+x ${{ github.workspace }}/bin/repo
 
-      # --- ИСПРАВЛЕНИЕ: Шаг 2 - Использование инструментов ---
-      - name: Download AOSP Kernel Sources
+      - name: Initialize and Sync Kernel Source
         run: |
-          mkdir workspace
-          cd workspace
+          # Задаем переменные
+          KERNEL_DIR="kernel_source"
+          MANIFEST_URL="https://android.googlesource.com/kernel/manifest"
+          MANIFEST_BRANCH="android-gs-shusky-6.1-android16"
           
-          echo "Initializing repo for kernel sources..."
-          # Теперь эта команда найдет 'repo' в PATH
-          repo init -u https://android.googlesource.com/kernel/manifest -b android-gs-shusky-6.1-android15-qpr2-beta --depth=1
+          # Создаем и переходим в директорию для исходников
+          mkdir -p "$KERNEL_DIR"
+          cd "$KERNEL_DIR"
           
-          echo "Syncing sources... This may take a while."
-          repo sync -c -j$(nproc) --no-tags
-
-      - name: Clone AnyKernel3 and Other Dependencies
-        run: |
-          echo "Cloning AnyKernel3, susfs, and patch repositories..."
+          echo "Initializing repo with branch: $MANIFEST_BRANCH"
+          repo init --depth=1 -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH"
           
-          ANYKERNEL_BRANCH="15.0.0-sultan-${{ inputs.codename }}"
-          SUSFS_BRANCH="gki-android14-6.1"
-
-          echo "Using AnyKernel3 branch: $ANYKERNEL_BRANCH"
-          echo "Using SUSFS branch: $SUSFS_BRANCH"
-
-          git clone https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
-          git clone https://github.com/TheWildJames/kernel_patches.git
-
-      - name: Add KernelSU, Prepare and Patch Kernel
-        working-directory: ./workspace/aosp
-        run: |
-          # --- Этот блок остается вашим, с исправленными путями ---
+          # Проверяем, не является ли ветка устаревшей (deprecated)
+          REMOTE_BRANCH_STATUS=$(git ls-remote --heads "$MANIFEST_URL" "refs/heads/$MANIFEST_BRANCH")
+          DEFAULT_MANIFEST_PATH=".repo/manifests/default.xml"
           
-          # Adding KernelSU-Next
-          echo "Adding KernelSU..."
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-          
-          # Copy SUSFS Source Files
-          echo "Copying SUSFS source files..."
-          cp ../../susfs4ksu/kernel_patches/fs/susfs.c ./fs/
-          cp ../../susfs4ksu/kernel_patches/include/linux/susfs.h ./include/linux/
-          cp ../../susfs4ksu/kernel_patches/include/linux/susfs_def.h ./include/linux/
-
-          # Applying the main SUSFS patch to the kernel
-          echo "Applying main SUSFS patch set to kernel tree (ignoring expected sys.c failure)..."
-          patch -p1 < ../../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
-          
-          # Integration of SUSFS with KernelSU-Next
-          echo "Entering KernelSU-Next directory..."
-          cd ./KernelSU-Next
-          
-          echo "Applying original SUSFS integration patch, failures are expected..."
-          cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-          patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-
-          echo "Applying official compatibility fixes for SUSFS v1.5.9..."
-          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_apk_sign.c.patch
-          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_core_hook.c.patch
-          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_selinux.c.patch
-          patch -p1 --forward < ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_ksud.c.patch
-          
-          if [ -f ../../../kernel_patches/next/fix_sucompat.c.patch ]; then
-            patch -p1 --forward < ../../../kernel_patches/next/fix_sucompat.c.patch
-          fi
-
-          # Return and apply remaining patches
-          echo "Returning to kernel root directory..."
-          cd ..
-
-          echo "Applying final compatibility fix for sys.c..."
-          if [ -f ../../kernel_patches/sultan/sys.c_fix.patch ]; then
-              patch -p1 --fuzz=3 < ../../kernel_patches/sultan/sys.c_fix.patch
-          fi
-
-          echo "Applying KSU Hooks..."
-          if [ -f ../../kernel_patches/next/syscall_hooks.patch ]; then
-              cp ../../kernel_patches/next/syscall_hooks.patch ./
-              patch -p1 --fuzz=3 < ./syscall_hooks.patch
+          # Если git ls-remote не находит точную ветку, предполагаем, что она может быть deprecated
+          if [ -z "$REMOTE_BRANCH_STATUS" ]; then
+            echo "Branch '$MANIFEST_BRANCH' not found. Checking for 'deprecated/$MANIFEST_BRANCH'."
+            # Изменяем манифест для использования deprecated пути
+            sed -i "s|\"refs/heads/${MANIFEST_BRANCH}\"|\"refs/heads/deprecated/${MANIFEST_BRANCH}\"|g" "$DEFAULT_MANIFEST_PATH"
+            
+            # Проверяем изменения
+            echo "Manifest updated to use deprecated branch path."
+            grep "deprecated" "$DEFAULT_MANIFEST_PATH"
           fi
           
-          echo "Applying Hide Stuff Patches..."
-          if [ -f ../../kernel_patches/69_hide_stuff.patch ]; then
-             cp ../../kernel_patches/69_hide_stuff.patch ./
-             patch -p1 -F 3 < 69_hide_stuff.patch
-          fi
-
-      - name: Setup tmate session for debugging
-        uses: mxschmitt/action-tmate@v3
-        with:
-          working-directory: ./workspace/aosp
+          echo "Syncing kernel source..."
+          repo sync -c -j$(nproc --all) --no-tags --fail-fast
+        
+      - name: Verify Source Code Structure
+        run: |
+          echo "Kernel source synced into 'kernel_source' directory."
+          echo "Directory structure:"
+          ls -lA kernel_source
+          echo "Common kernel directory:"
+          ls -lA kernel_source/common
