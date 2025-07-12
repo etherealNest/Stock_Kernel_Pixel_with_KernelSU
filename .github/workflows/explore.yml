@@ -30,8 +30,6 @@ jobs:
           remove-cached-tools: 'false'   # Avoid unless confirmed safe
           verbose: 'true'                # Enable detailed logging
 
-    steps:
-
       - name: Install ccache
         run: sudo apt update && sudo apt install -y ccache
 
