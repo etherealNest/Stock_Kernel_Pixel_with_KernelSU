@@ -218,10 +218,23 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
-      - name: Build Kernel
+      - name: Build Kernel from Patched Sources
         working-directory: kernel_source
         run: |
-          ./build_shusky.sh --kernel_package=@//aosp
+          # Этот вызов корректно запускает полную компиляцию,
+          # даже если финальная упаковка использует prebuilt.
+          # Нам важен побочный продукт этой сборки - скомпилированный Image.
+          
+          tools/bazel run \
+            --config=stamp \
+            --config=shusky \
+            --kernel_package=@//aosp \
+            //private/devices/google/shusky:zuma_shusky_dist
+
+      #- name: Build Kernel
+      #  working-directory: kernel_source
+      #  run: |
+      #    ./build_shusky.sh --kernel_package=@//aosp
 
       #- name: Prepare Artifacts for Packaging
         #run: |
@@ -253,34 +266,42 @@ jobs:
 
       - name: Prepare Artifacts for Packaging
         run: |
-          # НАСТОЯЩИЙ РЕЗУЛЬТАТ СБОРКИ
-          # Мы берем его из директории "смешанного дерева"
-          COMPILED_IMAGE="kernel_source/out/bazel/output_user_root/96d9a27455ac53fca5c40bb98d44c86f/execroot/__main__/bazel-out/k8-fastbuild/bin/private/devices/google/shusky/kernel_kbuild_mixed_tree/Image"
-      
-          # DTB файлы мы по-прежнему берем из финальной директории dist
+          # Находим путь к НАСТОЯЩЕМУ скомпилированному ядру, используя маску (*) для динамической части
+          COMPILED_IMAGE_PATH=$(find kernel_source/out/bazel/output_user_root/*/execroot/__main__/bazel-out/k8-fastbuild/bin/aosp/kernel_aarch64 -name Image)
+          
+          # Проверяем, что файл найден
+          if [ -z "$COMPILED_IMAGE_PATH" ]; then
+            echo "::error::FATAL: Could not find the compiled kernel Image file after a successful build!"
+            exit 1
+          fi
+
+          # Директория с DTB файлами, которые создаются корректно
           DTB_DIR="kernel_source/out/shusky/dist"
           
           # Целевые директории
           ANYKERNEL_DIR="AnyKernel3"
           MKBOOTIMG_DIR="FilesForImg"
-      
-          echo "Copying REAL compiled kernel from $COMPILED_IMAGE"
-      
+
+          echo "Found REAL compiled kernel at: $COMPILED_IMAGE_PATH"
+          
           mkdir -p "$ANYKERNEL_DIR"
           mkdir -p "$MKBOOTIMG_DIR"
           
-          # Сжимаем НАСТОЯЩИЙ Image в lz4
-          lz4 -f "$COMPILED_IMAGE" "$ANYKERNEL_DIR/Image.lz4"
-          
+          # --- Подготовка для AnyKernel3 ---
+          # Сжимаем НАСТОЯЩИЙ Image в lz4 и кладем в AnyKernel3
+          lz4 -f "$COMPILED_IMAGE_PATH" "$ANYKERNEL_DIR/Image.lz4"
           # Копируем DTB для AnyKernel
           cat "$DTB_DIR"/*.dtb > "$ANYKERNEL_DIR/dtb"
           
-          # Копируем артефакты для создания .img
-          cp "$COMPILED_IMAGE" "$MKBOOTIMG_DIR/"
-          lz4 -f "$COMPILED_IMAGE" "$MKBOOTIMG_DIR/Image.lz4"
+          # --- Подготовка для создания .img файлов ---
+          # Копируем несжатый Image
+          cp "$COMPILED_IMAGE_PATH" "$MKBOOTIMG_DIR/Image"
+          # Сжимаем и копируем lz4 версию
+          lz4 -f "$COMPILED_IMAGE_PATH" "$MKBOOTIMG_DIR/Image.lz4"
+          # Копируем DTB
           cat "$DTB_DIR"/*.dtb > "$MKBOOTIMG_DIR/dtb"
-      
-          echo "Artifacts prepared successfully."
+
+          echo "Artifacts prepared successfully from REAL build output."
 
       - name: Create ZIP Files for Different Formats
         working-directory: AnyKernel3
