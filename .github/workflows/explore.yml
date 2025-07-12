@@ -218,90 +218,56 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
-      - name: Build Kernel from Patched Sources
-        working-directory: kernel_source
-        run: |
+      - name: Setup SSH session for debugging
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+
+      #- name: Build Kernel from Patched Sources
+        #working-directory: kernel_source
+        #run: |
           # Этот вызов корректно запускает полную компиляцию,
           # даже если финальная упаковка использует prebuilt.
           # Нам важен побочный продукт этой сборки - скомпилированный Image.
           
-          tools/bazel run \
-            --config=stamp \
-            --config=shusky \
-            --kernel_package=@//aosp \
-            //private/devices/google/shusky:zuma_shusky_dist
+          #tools/bazel run \
+            #--config=stamp \
+            #--config=shusky \
+            #--kernel_package=@//aosp \
+            #//private/devices/google/shusky:zuma_shusky_dist
 
-      #- name: Build Kernel
-      #  working-directory: kernel_source
-      #  run: |
-      #    ./build_shusky.sh --kernel_package=@//aosp
-
-      #- name: Prepare Artifacts for Packaging
-        #run: |
-          ## Директории для артефактов
-          #ARTIFACT_DIR="kernel_source/out/shusky/dist"
-          #ANYKERNEL_DIR="AnyKernel3"
-          #MKBOOTIMG_DIR="FilesForImg"
-
-          #echo "Preparing artifacts from $ARTIFACT_DIR"
-#          
-          ## Создаем обе целевые директории
-          #mkdir -p "$ANYKERNEL_DIR"
-          #mkdir -p "$MKBOOTIMG_DIR" # <-- Добавленная строка
-#          
-          ## 1. Подготовка для AnyKernel3
-          #cp "$ARTIFACT_DIR/Image.lz4" "$ANYKERNEL_DIR/Image.lz4"
-          #cat "$ARTIFACT_DIR"/*.dtb > "$ANYKERNEL_DIR/dtb"
-#          
-          ## 2. Подготовка для создания .img файлов
-          #cp "$ARTIFACT_DIR/Image" "$MKBOOTIMG_DIR/"
-          #cp "$ARTIFACT_DIR/Image.lz4" "$MKBOOTIMG_DIR/"
-          #cat "$ARTIFACT_DIR"/*.dtb > "$MKBOOTIMG_DIR/dtb"
-
-          #echo "Artifacts prepared successfully."
-          #echo "--- AnyKernel3 content: ---"
-          #ls -l "$ANYKERNEL_DIR"
-          #echo "--- FilesForImg content: ---"
-          #ls -l "$MKBOOTIMG_DIR"
+      - name: Build Kernel
+        working-directory: kernel_source
+        run: |
+          ./build_shusky.sh --kernel_package=@//aosp
 
       - name: Prepare Artifacts for Packaging
         run: |
-          # Находим путь к НАСТОЯЩЕМУ скомпилированному ядру, используя маску (*) для динамической части
-          COMPILED_IMAGE_PATH=$(find kernel_source/out/bazel/output_user_root/*/execroot/__main__/bazel-out/k8-fastbuild/bin/aosp/kernel_aarch64 -name Image)
-          
-          # Проверяем, что файл найден
-          if [ -z "$COMPILED_IMAGE_PATH" ]; then
-            echo "::error::FATAL: Could not find the compiled kernel Image file after a successful build!"
-            exit 1
-          fi
-
-          # Директория с DTB файлами, которые создаются корректно
-          DTB_DIR="kernel_source/out/shusky/dist"
-          
-          # Целевые директории
+          # Директории для артефактов
+          ARTIFACT_DIR="kernel_source/out/shusky/dist"
           ANYKERNEL_DIR="AnyKernel3"
           MKBOOTIMG_DIR="FilesForImg"
 
-          echo "Found REAL compiled kernel at: $COMPILED_IMAGE_PATH"
-          
+          echo "Preparing artifacts from $ARTIFACT_DIR"
+        
+          # Создаем обе целевые директории
           mkdir -p "$ANYKERNEL_DIR"
-          mkdir -p "$MKBOOTIMG_DIR"
+          mkdir -p "$MKBOOTIMG_DIR" # <-- Добавленная строка
           
-          # --- Подготовка для AnyKernel3 ---
-          # Сжимаем НАСТОЯЩИЙ Image в lz4 и кладем в AnyKernel3
-          lz4 -f "$COMPILED_IMAGE_PATH" "$ANYKERNEL_DIR/Image.lz4"
-          # Копируем DTB для AnyKernel
-          cat "$DTB_DIR"/*.dtb > "$ANYKERNEL_DIR/dtb"
-          
-          # --- Подготовка для создания .img файлов ---
-          # Копируем несжатый Image
-          cp "$COMPILED_IMAGE_PATH" "$MKBOOTIMG_DIR/Image"
-          # Сжимаем и копируем lz4 версию
-          lz4 -f "$COMPILED_IMAGE_PATH" "$MKBOOTIMG_DIR/Image.lz4"
-          # Копируем DTB
-          cat "$DTB_DIR"/*.dtb > "$MKBOOTIMG_DIR/dtb"
+          # 1. Подготовка для AnyKernel3
+          cp "$ARTIFACT_DIR/Image.lz4" "$ANYKERNEL_DIR/Image.lz4"
+          cat "$ARTIFACT_DIR"/*.dtb > "$ANYKERNEL_DIR/dtb"
+        
+          # 2. Подготовка для создания .img файлов
+          cp "$ARTIFACT_DIR/Image" "$MKBOOTIMG_DIR/"
+          cp "$ARTIFACT_DIR/Image.lz4" "$MKBOOTIMG_DIR/"
+          cat "$ARTIFACT_DIR"/*.dtb > "$MKBOOTIMG_DIR/dtb"
 
-          echo "Artifacts prepared successfully from REAL build output."
+          echo "Artifacts prepared successfully."
+          echo "--- AnyKernel3 content: ---"
+          ls -l "$ANYKERNEL_DIR"
+          echo "--- FilesForImg content: ---"
+          ls -l "$MKBOOTIMG_DIR"
 
       - name: Create ZIP Files for Different Formats
         working-directory: AnyKernel3
@@ -358,8 +324,3 @@ jobs:
             # Загружаем образы .img из корня
             boot_shusky_next.img
             vendor_kernel_boot_shusky_next.img
-
-      - name: Setup SSH session for debugging
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: true
