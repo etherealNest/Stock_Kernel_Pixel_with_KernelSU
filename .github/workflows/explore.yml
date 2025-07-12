@@ -221,10 +221,16 @@ jobs:
       - name: Build Kernel from Patched Sources
         working-directory: kernel_source
         run: |
-          # Вызываем сборочный скрипт напрямую с современным флагом,
-          # который принудительно указывает на сборку из локальных исходников 'aosp'.
-          # "$@" в конце позволяет передавать любые дополнительные параметры, если потребуется.
-          ./build_shusky.sh --kernel_package=@//aosp "$@"
+          # Вызываем Bazel напрямую, минуя скрипт-обертку.
+          # Это дает нам полный контроль над передаваемыми флагами.
+          # Мы берем команду из build_shusky.sh и добавляем к ней
+          # --kernel_package=@//aosp, чтобы принудительно указать источник ядра.
+          
+          tools/bazel run \
+            --config=stamp \
+            --config=shusky \
+            --kernel_package=@//aosp \
+            //private/devices/google/shusky:zuma_shusky_dist
 
       - name: Prepare Artifacts for Packaging
         run: |
