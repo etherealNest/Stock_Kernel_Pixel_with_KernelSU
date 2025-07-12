@@ -218,10 +218,13 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
-      - name: Build
+      - name: Build Kernel from Patched Sources
         working-directory: kernel_source
-        run : |
-          ./build_shusky.sh
+        run: |
+          # Устанавливаем переменную окружения, чтобы скрипт build_shusky.sh
+          # добавил флаг --kernel_package=@//aosp и собрал ядро из исходников,
+          # а не использовал предсобранное.
+          BUILD_AOSP_KERNEL=1 ./build_shusky.sh
 
       - name: Prepare Artifacts for Packaging
         run: |
