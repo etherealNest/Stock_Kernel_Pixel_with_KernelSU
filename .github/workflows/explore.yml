@@ -223,25 +223,21 @@ jobs:
         #with:
           #limit-access-to-actor: true
 
-      - name: Start SSHD + Cloudflared Tunnel
-        uses: valeriangalliat/action-sshd-cloudflared@v1
+      - name: Start VS Code Web IDE
+        uses: fawazahmed0/action-debug-vscode@main
         with:
-          # (опционально) URL вашего Cloudflare Tunnel:
-          tunnel: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
-          credentials: ${{ secrets.CLOUDFLARE_TUNNEL_CREDENTIALS }}
-          # Упрощённый доступ с автоматическим созданием ключей:
-          generate_ssh_key: true
+          # Порт в раннере, на котором запустится веб‑IDE
+          port: 8080
+          # Корень проекта, который откроется в VS Code
+          folder: ${{ github.workspace }}/kernel_source
+          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for SSH
+      - name: Print VS Code connection info
         run: |
-          echo "Waiting for SSH to be ready…"
-          # action-sshd-cloudflared выставляет переменную SSH_PORT и SSH_HOST
-          for i in {1..30}; do
-            nc -z $SSH_HOST $SSH_PORT && break
-            sleep 1
-          done
-          echo "Ready! Connect with:"
-          echo "ssh -p $SSH_PORT runner@$SSH_HOST"
+          echo "🔗 VS Code Web IDE is ready!"
+          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
+          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
 
       #- name: Build Kernel from Patched Sources
         #working-directory: kernel_source
