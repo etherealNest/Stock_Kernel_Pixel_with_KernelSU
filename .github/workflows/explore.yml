@@ -235,8 +235,14 @@ jobs:
       - name: 2. Replace Prebuilt Kernel with Custom
         working-directory: kernel_source
         run: |
-          # Находим путь к предсобранному ядру. Он всегда находится в external/
-          PREBUILT_KERNEL_PATH=$(find -L external/gki_prebuilts -name "Image.lz4")
+          # Ищем prebuilt Image.lz4 в директории out, где Bazel хранит внешние зависимости
+          PREBUILT_KERNEL_PATH=$(find out -path "*external/gki_prebuilts/*" -name "Image.lz4")
+          
+          if [ -z "$PREBUILT_KERNEL_PATH" ]; then
+            echo "::error::Could not find the prebuilt kernel Image.lz4!"
+            exit 1
+          fi
+          
           echo "Found prebuilt kernel at: ${PREBUILT_KERNEL_PATH}"
 
           # Сжимаем наш свежескомпилированный Image в формат lz4
@@ -246,6 +252,13 @@ jobs:
           echo "Replacing prebuilt kernel with our custom compiled version..."
           cp -f bazel-bin/aosp/kernel_aarch64/Image.lz4 "${PREBUILT_KERNEL_PATH}"
           echo "Replacement complete."
+
+      - name: Setup SSH session on Failure
+        # Этот шаг выполнится, только если предыдущий шаг провалился
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
 
       - name: 3. Build Final Distribution with Replaced Kernel
         working-directory: kernel_source
