@@ -4,27 +4,30 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  actions: write 
 
 jobs:
-  debug-session:
+  build-gki:
     runs-on: ubuntu-latest
-    timeout-minutes: 60 # Таймаут сессии отладки
+    timeout-minutes: 120
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
 
-      - name: Maximize Build Space
-        uses: AdityaGarg8/remove-unwanted-software@v5
-        with:
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
-          remove-large-packages: 'true'
-          remove-swapfile: 'true'
+      - name: Install ccache
+        run: sudo apt update && sudo apt install -y ccache
+
+      - name: Set up ccache
+        run: |
+          mkdir -p ~/.cache/bazel
+          ccache --version
+          ccache --max-size=2G
+          ccache --set-config=compression=true
+          echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
 
       - name: Install Repo
         run: |
@@ -33,22 +36,35 @@ jobs:
           chmod a+x .bin/repo
           echo "$GITHUB_WORKSPACE/.bin" >> $GITHUB_PATH
 
+      - name: Check Disk Space Before Sync
+        run: |
+          echo "Disk space before kernel source sync:"
+          df -h
+
+
       - name: Initialize and Sync Kernel Source
         run: |
+          # Статичные параметры для конкретной сборки
           KERNEL_DIR="kernel_source"
           MANIFEST_URL="https://android.googlesource.com/kernel/manifest"
           MANIFEST_BRANCH="android-gs-shusky-6.1-android16"
           
+          # Создание рабочей директории
           mkdir -p "$KERNEL_DIR"
           cd "$KERNEL_DIR"
           
-          echo "Initializing repo..."
+          echo "Initializing repo for branch: $MANIFEST_BRANCH"
           repo init --depth=1 -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH"
+          
+          # Проверка на случай, если ветка была переименована в 'deprecated'
+          # Использует --exit-code для более надежной проверки, чем анализ текста
+          if ! git ls-remote --exit-code --heads "$MANIFEST_URL" "refs/heads/$MANIFEST_BRANCH" &>/dev/null; then
+            echo "Branch '$MANIFEST_BRANCH' not found. Attempting to use 'deprecated/$MANIFEST_BRANCH'."
+            sed -i "s|\"refs/heads/${MANIFEST_BRANCH}\"|\"refs/heads/deprecated/${MANIFEST_BRANCH}\"|g" .repo/manifests/default.xml
+          fi
           
           echo "Syncing kernel source..."
           repo sync -c -j$(nproc --all) --no-tags --fail-fast
-          
-          echo "Sync complete. Source code is in $GITHUB_WORKSPACE/$KERNEL_DIR"
 
       - name: Setup SSH session for debugging
         uses: mxschmitt/action-tmate@v3
