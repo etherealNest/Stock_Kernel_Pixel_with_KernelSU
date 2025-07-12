@@ -39,9 +39,7 @@ jobs:
       - name: Clone AnyKernel3 and Other Dependencies
         run: |
           echo "Cloning AnyKernel3 and other dependencies..."
-          ANYKERNEL_BRANCH="gki-2.0"
-          echo "Using branch for AnyKernel3: $ANYKERNEL_BRANCH"
-          # git clone https://github.com/WildPlusKernel/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
+          git clone https://github.com/WildPlusKernel/AnyKernel3.git -b "sultan-zuma"
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "gki-android14-6.1"
           git clone https://github.com/WildPlusKernel/kernel_patches.git
 
@@ -81,7 +79,7 @@ jobs:
               echo "Adding KernelSU Next..."
               curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Apply SUSFS Patches for KernelSU Variants
+      - name: Apply SUSFS Patches
         working-directory: kernel_source/aosp
         run: |          
           echo "Applying SUSFS patches..."
@@ -93,7 +91,9 @@ jobs:
           cp ../../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
           
           echo "Applying SUSFS patches for KernelSU Next..."
+
           cd ./KernelSU-Next
+
           cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
           patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
           
@@ -174,6 +174,126 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./arch/arm64/configs/gki_defconfig
+
+      - name: Change Kernel Name and Version
+        working-directory: kernel_source/aosp
+        run: |
+          # Жестко задаем дату и время компиляции для воспроизводимости
+          # Обратите внимание, что mkcompile_h находится в aosp/scripts
+          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Apr 20 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
+          
+          # Упрощенное добавление суффикса
+          # Добавляем статичный суффикс к версии ядра
+          # KSU_VERSION здесь не определена, поэтому используем статичное имя
+          sed -i '$s|echo "\$res"|echo "\$res-NEXT-SUSFS-Wild"|' ./scripts/setlocalversion
+          
+          # Убираем суффикс "-dirty"
+          sed -i 's/-dirty//' ./scripts/setlocalversion
+          
+          # Модификация для Bazel-сборки (Kleaf)
+          # build-timestamp в init/Makefile
+          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Apr 20 04:20:00 UTC 2025"/' ./init/Makefile
+          
+          # Удаление проверки ABI и самих файлов. Пути адаптированы.
+          # Файл BUILD.bazel находится в корне kernel_source
+          sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./BUILD.bazel
+          rm -rf ./android/abi_gki_protected_exports_*
+          
+          # stamp.bzl находится в build/kernel/kleaf/impl/
+          # Путь отсчитывается от kernel_source, не от aosp
+          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ../build/kernel/kleaf/impl/stamp.bzl
+          
+          # Добавление суффикса в defconfig
+          sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
+
+      - name: Build
+        working-directory: kernel_source
+        run : |
+          ./build_shusky.sh
+
+      - name: Prepare Artifacts for Packaging
+        run: |
+          # Директории для артефактов
+          ARTIFACT_DIR="kernel_source/out/shusky/dist"
+          ANYKERNEL_DIR="AnyKernel3"
+          MKBOOTIMG_DIR="FilesForImg"
+
+          echo "Preparing artifacts from $ARTIFACT_DIR"
+          
+          # Создаем обе целевые директории
+          mkdir -p "$ANYKERNEL_DIR"
+          mkdir -p "$MKBOOTIMG_DIR" # <-- Добавленная строка
+          
+          # 1. Подготовка для AnyKernel3
+          cp "$ARTIFACT_DIR/Image.lz4" "$ANYKERNEL_DIR/Image.lz4"
+          cat "$ARTIFACT_DIR"/*.dtb > "$ANYKERNEL_DIR/dtb"
+          
+          # 2. Подготовка для создания .img файлов
+          cp "$ARTIFACT_DIR/Image" "$MKBOOTIMG_DIR/"
+          cp "$ARTIFACT_DIR/Image.lz4" "$MKBOOTIMG_DIR/"
+          cat "$ARTIFACT_DIR"/*.dtb > "$MKBOOTIMG_DIR/dtb"
+
+          echo "Artifacts prepared successfully."
+          echo "--- AnyKernel3 content: ---"
+          ls -l "$ANYKERNEL_DIR"
+          echo "--- FilesForImg content: ---"
+          ls -l "$MKBOOTIMG_DIR"
+
+      - name: Create ZIP Files for Different Formats
+        working-directory: AnyKernel3
+        run: |
+          # Zip the files in the AnyKernel3 directory with a new naming convention
+          ZIP_NAME="zuma_A16_Sultan_Next_SUSFS.zip"
+          echo "Creating zip file $ZIP_NAME..."
+          zip -r "../$ZIP_NAME" ./*
+
+      - name: Set environment variables for Tools
+        run: |
+          # Пути указываются относительно корня GITHUB_WORKSPACE
+          # avbtool и ключ подписи находятся в kernel_source/prebuilts/kernel-build-tools
+          echo "AVBTOOL=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/bin/avbtool" >> $GITHUB_ENV
+          echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
+          
+          # mkbootimg находится в kernel_source/tools/mkbootimg
+          echo "MKBOOTIMG=$GITHUB_WORKSPACE/kernel_source/tools/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
+
+      - name: Build boot.img and vendor_kernel_boot.img
+        # Работаем в директории, где лежат подготовленные файлы
+        working-directory: FilesForImg 
+        run: |
+          # Используем Image.lz4, так как он является стандартным для Pixel 8
+          
+          # === 1. Создание boot.img (содержит ядро) ===
+          echo "Building boot.img..."
+          $MKBOOTIMG --header_version 4 --kernel Image.lz4 --output boot.img
+          
+          # Подпись boot.img
+          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
+
+          # === 2. Создание vendor_kernel_boot.img (содержит DTB) ===
+          echo "Building vendor_kernel_boot.img..."
+          # Ключевой параметр --dtb, который использует объединенный файл dtb
+          $MKBOOTIMG --header_version 4 --dtb dtb --output vendor_kernel_boot.img
+
+          # Подпись vendor_kernel_boot.img
+          $AVBTOOL add_hash_footer --partition_name vendor_kernel_boot --partition_size $((64 * 1024 * 1024)) --image vendor_kernel_boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
+
+          # Копируем готовые образы в корень проекта для загрузки артефактов
+          cp boot.img ../boot_shusky_next.img
+          cp vendor_kernel_boot.img ../vendor_kernel_boot_shusky_next.img
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          # Используем статичное, понятное имя
+          name: shusky-kernel-NEXT-SUSFS
+          path: |
+            # Загружаем ZIP-файл из корня
+            zuma_A16_Sultan_Next_SUSFS.zip
+            
+            # Загружаем образы .img из корня
+            boot_shusky_next.img
+            vendor_kernel_boot_shusky_next.img
 
       - name: Setup SSH session for debugging
         uses: mxschmitt/action-tmate@v3
