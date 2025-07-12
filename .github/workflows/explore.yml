@@ -218,19 +218,41 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
-      - name: Build Kernel from Patched Sources
+      - name: 1. Force-Compile Kernel from Sources
         working-directory: kernel_source
         run: |
-          # Вызываем Bazel напрямую, минуя скрипт-обертку.
-          # Это дает нам полный контроль над передаваемыми флагами.
-          # Мы берем команду из build_shusky.sh и добавляем к ней
-          # --kernel_package=@//aosp, чтобы принудительно указать источник ядра.
-          
-          tools/bazel run \
-            --config=stamp \
+          # Эта команда собирает ТОЛЬКО ядро из пакета 'aosp'.
+          # Мы используем 'build', а не 'run', так как нам нужен только артефакт.
+          # Конфигурация 'shusky' используется, чтобы применить правильные опции компилятора.
+          tools/bazel build \
             --config=shusky \
-            --kernel_package=@//aosp \
-            //private/devices/google/shusky:zuma_shusky_dist
+            //aosp:kernel_aarch64
+
+          # Проверяем, что артефакт действительно был создан
+          echo "Custom kernel compiled successfully:"
+          ls -l bazel-bin/aosp/kernel_aarch64/Image
+
+      - name: 2. Replace Prebuilt Kernel with Custom
+        working-directory: kernel_source
+        run: |
+          # Находим путь к предсобранному ядру. Он всегда находится в external/
+          PREBUILT_KERNEL_PATH=$(find -L external/gki_prebuilts -name "Image.lz4")
+          echo "Found prebuilt kernel at: ${PREBUILT_KERNEL_PATH}"
+
+          # Сжимаем наш свежескомпилированный Image в формат lz4
+          lz4 -f bazel-bin/aosp/kernel_aarch64/Image bazel-bin/aosp/kernel_aarch64/Image.lz4
+
+          # Физически заменяем предсобранный файл нашим
+          echo "Replacing prebuilt kernel with our custom compiled version..."
+          cp -f bazel-bin/aosp/kernel_aarch64/Image.lz4 "${PREBUILT_KERNEL_PATH}"
+          echo "Replacement complete."
+
+      - name: 3. Build Final Distribution with Replaced Kernel
+        working-directory: kernel_source
+        run: |
+          # Теперь мы запускаем стандартный скрипт. Он возьмет ядро из prebuilts,
+          # но там уже будет лежать НАШ файл.
+          ./build_shusky.sh
 
       - name: Prepare Artifacts for Packaging
         run: |
