@@ -1,0 +1,309 @@
+diff --git a/kernel_source/private/devices/google/shusky/BUILD.bazel b/kernel_source/private/devices/google/shusky/BUILD.bazel
+index a471088..49a0810 100644
+--- a/kernel_source/private/devices/google/shusky/BUILD.bazel
++++ b/kernel_source/private/devices/google/shusky/BUILD.bazel
+@@ -7,7 +7,7 @@ load(
+     "kernel_build",
+     "kernel_build_config",
+     "kernel_dtstree",
+-    "kernel_images",
++    #"kernel_images",
+     "kernel_module_group",
+     "kernel_modules_install",
+     "kernel_unstripped_modules_archive",
+@@ -69,22 +69,88 @@ kernel_build(
+     srcs = [":kernel_sources"],
+     outs = [
+         ".config",
++        "Image",
++        "Image.lz4",
++        "System.map",
+     ] + [
+         "zuma/{}".format(dtb)
+         for dtb in ZUMA_DTBS + ZUMA_DPM_DTBOS
+     ] + SHUSKY_DTBOS,
+-    base_kernel = "//common:kernel_aarch64",
++    #base_kernel = "//common:kernel_aarch64",
+     build_config = ":build_config",
+     collect_unstripped_modules = True,
+     defconfig_fragments = [":defconfig_fragments"],
+     dtstree = ":dtstree",
+     kconfig_ext = ":kconfig_ext",
+-    kmi_symbol_list = "//common:android/abi_gki_aarch64_pixel",
++    #kmi_symbol_list = "//common:android/abi_gki_aarch64_pixel",
+     make_goals = [
++        "all",
++        "Image.lz4",
+         "modules",
+         "dtbs",
+     ],
+-    module_outs = ZUMA_MODULE_OUTS,
++    module_outs = ZUMA_MODULE_OUTS + [
++        "net/6lowpan/nhc_mobility.ko",
++        "drivers/bluetooth/btbcm.ko",
++        "drivers/net/ppp/pppox.ko",
++        "net/ieee802154/6lowpan/ieee802154_6lowpan.ko",
++        "net/6lowpan/nhc_ipv6.ko",
++        "drivers/net/can/vcan.ko",
++        "drivers/net/can/slcan/slcan.ko",
++        "net/tipc/diag.ko",
++        "drivers/net/usb/ax88179_178a.ko",
++        "net/l2tp/l2tp_ppp.ko",
++        "drivers/usb/serial/ftdi_sio.ko",
++        "arch/arm64/geniezone/gzvm.ko",
++        "net/6lowpan/nhc_routing.ko",
++        "net/nfc/nfc.ko",
++        "net/mac802154/mac802154.ko",
++        "drivers/net/mii.ko",
++        "drivers/net/ppp/ppp_generic.ko",
++        "drivers/bluetooth/btqca.ko",
++        "drivers/net/usb/r8153_ecm.ko",
++        "net/tipc/tipc.ko",
++        "drivers/net/usb/rtl8150.ko",
++        "net/ieee802154/ieee802154.ko",
++        "drivers/block/zram/zram.ko",
++        "net/bluetooth/rfcomm/rfcomm.ko",
++        "drivers/net/usb/cdc_eem.ko",
++        "drivers/net/usb/cdc_ncm.ko",
++        "net/6lowpan/6lowpan.ko",
++        "net/6lowpan/nhc_dest.ko",
++        "net/l2tp/l2tp_core.ko",
++        "drivers/net/ppp/pptp.ko",
++        "drivers/net/ppp/ppp_deflate.ko",
++        "mm/zsmalloc.ko",
++        "drivers/net/usb/asix.ko",
++        "net/can/can-bcm.ko",
++        "drivers/net/usb/aqc111.ko",
++        "drivers/usb/class/cdc-acm.ko",
++        "net/rfkill/rfkill.ko",
++        "net/6lowpan/nhc_udp.ko",
++        "drivers/net/usb/usbnet.ko",
++        "kernel/kheaders.ko",
++        "net/bluetooth/bluetooth.ko",
++        "net/6lowpan/nhc_hop.ko",
++        "drivers/usb/serial/usbserial.ko",
++        "drivers/net/wwan/wwan.ko",
++        "net/can/can-raw.ko",
++        "drivers/net/ppp/ppp_mppe.ko",
++        "net/8021q/8021q.ko",
++        "net/ieee802154/ieee802154_socket.ko",
++        "drivers/net/can/dev/can-dev.ko",
++        "drivers/net/usb/cdc_ether.ko",
++        "net/can/can-gw.ko",
++        "drivers/net/usb/r8152.ko",
++        "net/bluetooth/hidp/hidp.ko",
++        "drivers/net/slip/slhc.ko",
++        "net/6lowpan/nhc_fragment.ko",
++        "drivers/net/ppp/bsd_comp.ko",
++        "drivers/bluetooth/hci_uart.ko",
++        "drivers/bluetooth/btsdio.ko",
++        "lib/crypto/libarc4.ko",
++        "net/can/can.ko",
++    ],
+     strip_modules = True,
+ )
+ 
+@@ -132,102 +198,112 @@ merged_kernel_uapi_headers(
+     kernel_modules = [":kernel_ext_modules"],
+ )
+ 
+-create_file(
+-    name = "vendor_ramdisk_modules_list",
+-    srcs = [
+-        # do not sort
+-        "//private/devices/google/zuma:vendor_ramdisk_modules_list",
+-        "vendor_ramdisk.modules.shusky",
+-    ],
+-    out = "vendor_ramdisk.modules",
+-)
+-
+-create_file(
+-    name = "system_dlkm_modules_list",
+-    srcs = ["//private/devices/google/zuma:system_dlkm_modules_list"],
+-    out = "system_dlkm.modules",
+-)
+-
+-create_file(
+-    name = "system_dlkm_props",
+-    srcs = ["//private/devices/google/zuma:system_dlkm_props"],
+-    out = "system_dlkm.props",
+-)
+-
+-create_file(
+-    name = "vendor_dlkm_modules_list",
+-    srcs = ["//private/devices/google/zuma:vendor_dlkm_modules_list"],
+-    out = "vendor_dlkm.modules",
+-)
+-
+-create_file(
+-    name = "vendor_dlkm_modules_blocklist",
+-    srcs = [
+-        # do not sort
+-        "//private/devices/google/zuma:vendor_dlkm_modules_blocklist",
+-        "vendor_dlkm.blocklist.shusky",
+-    ],
+-    out = "vendor_dlkm.blocklist",
+-)
+-
+-create_file(
+-    name = "vendor_dlkm_props",
+-    srcs = ["//private/devices/google/zuma:vendor_dlkm_props"],
+-    out = "vendor_dlkm.props",
+-)
+-
+-filegroup(
+-    name = "insmod_cfgs",
+-    srcs = glob(["insmod_cfg/*.cfg"]),
+-)
+-
+-kernel_images(
+-    name = "kernel_images",
+-    base_kernel_images = "//common:kernel_aarch64_images",
+-    # TODO: b/362627953 - Remove dtb.img
+-    boot_image_outs = [
+-        "dtb.img",
+-        "vendor_kernel_boot.img",
+-    ],
+-    build_dtbo = True,
+-    build_initramfs = True,
+-    build_system_dlkm = True,
+-    build_vendor_dlkm = True,
+-    build_vendor_kernel_boot = True,
+-    dtbo_srcs = [":kernel/" + dtbo for dtbo in SHUSKY_DTBOS],
+-    kernel_build = ":kernel",
+-    kernel_modules_install = ":kernel_modules_install",
+-    modules_list = ":vendor_ramdisk_modules_list",
+-    ramdisk_compression = "lz4",
+-    system_dlkm_modules_list = ":system_dlkm_modules_list",
+-    system_dlkm_props = ":system_dlkm_props",
+-    vendor_dlkm_archive = True,
+-    vendor_dlkm_etc_files = [":insmod_cfgs"],
+-    vendor_dlkm_modules_blocklist = ":vendor_dlkm_modules_blocklist",
+-    vendor_dlkm_modules_list = ":vendor_dlkm_modules_list",
+-    vendor_dlkm_props = ":vendor_dlkm_props",
+-    deps = ["//private/devices/google/common:sepolicy"],
+-)
+-
++#create_file(
++#    name = "vendor_ramdisk_modules_list",
++#    srcs = [
++#        # do not sort
++#        "//private/devices/google/zuma:vendor_ramdisk_modules_list",
++#        "vendor_ramdisk.modules.shusky",
++#    ],
++#    out = "vendor_ramdisk.modules",
++#)
++#
++#create_file(
++#    name = "system_dlkm_modules_list",
++#    srcs = ["//private/devices/google/zuma:system_dlkm_modules_list"],
++#    out = "system_dlkm.modules",
++#)
++#
++#create_file(
++#    name = "system_dlkm_props",
++#    srcs = ["//private/devices/google/zuma:system_dlkm_props"],
++#    out = "system_dlkm.props",
++#)
++#
++#create_file(
++#    name = "vendor_dlkm_modules_list",
++#    srcs = ["//private/devices/google/zuma:vendor_dlkm_modules_list"],
++#    out = "vendor_dlkm.modules",
++#)
++#
++#create_file(
++#    name = "vendor_dlkm_modules_blocklist",
++#    srcs = [
++#        # do not sort
++#        "//private/devices/google/zuma:vendor_dlkm_modules_blocklist",
++#        "vendor_dlkm.blocklist.shusky",
++#    ],
++#    out = "vendor_dlkm.blocklist",
++#)
++#
++#create_file(
++#    name = "vendor_dlkm_props",
++#    srcs = ["//private/devices/google/zuma:vendor_dlkm_props"],
++#    out = "vendor_dlkm.props",
++#)
++#
++#filegroup(
++#    name = "insmod_cfgs",
++#    srcs = glob(["insmod_cfg/*.cfg"]),
++#)
++#
++#kernel_images(
++#    name = "kernel_images",
++#    base_kernel_images = "//common:kernel_aarch64_images",
++#    # TODO: b/362627953 - Remove dtb.img
++#    boot_image_outs = [
++#        "dtb.img",
++#        "vendor_kernel_boot.img",
++#    ],
++#    build_dtbo = True,
++#    build_initramfs = True,
++#    build_system_dlkm = True,
++#    build_vendor_dlkm = True,
++#    build_vendor_kernel_boot = True,
++#    dtbo_srcs = [":kernel/" + dtbo for dtbo in SHUSKY_DTBOS],
++#    kernel_build = ":kernel",
++#    kernel_modules_install = ":kernel_modules_install",
++#    modules_list = ":vendor_ramdisk_modules_list",
++#    ramdisk_compression = "lz4",
++#    system_dlkm_modules_list = ":system_dlkm_modules_list",
++#    system_dlkm_props = ":system_dlkm_props",
++#    vendor_dlkm_archive = True,
++#    vendor_dlkm_etc_files = [":insmod_cfgs"],
++#    vendor_dlkm_modules_blocklist = ":vendor_dlkm_modules_blocklist",
++#    vendor_dlkm_modules_list = ":vendor_dlkm_modules_list",
++#    vendor_dlkm_props = ":vendor_dlkm_props",
++#    deps = ["//private/devices/google/common:sepolicy"],
++#)
++#
++#copy_to_dist_dir(
++#    name = "dist",
++#    data = [
++#        # keep sorted
++#        ":insmod_cfgs",
++#        ":kernel",
++#        ":kernel_images",
++#        ":kernel_modules_install",
++#        ":kernel_unstripped_modules_archive",
++#        ":merged_kernel_uapi_headers",
++#        "//common:android/abi_gki_aarch64_pixel",
++#        "//common:kernel_aarch64",
++#        "//common:kernel_aarch64_gki_boot_image",
++#        "//common:kernel_aarch64_headers",
++#        "//private/devices/google/common:kernel_gki_modules",
++#    ] + select({
++#        "//private/devices/google/common:enable_download_fips140": ["@gki_prebuilt_fips140//fips140.ko"],
++#        "//private/devices/google/common:disable_download_fips140": [],
++#    }),
++#    dist_dir = "out/shusky/dist",
++#    flat = True,
++#    log = "info",
++#)
+ copy_to_dist_dir(
+     name = "dist",
+     data = [
+-        # keep sorted
+-        ":insmod_cfgs",
+         ":kernel",
+-        ":kernel_images",
+         ":kernel_modules_install",
+-        ":kernel_unstripped_modules_archive",
+-        ":merged_kernel_uapi_headers",
+-        "//common:android/abi_gki_aarch64_pixel",
+-        "//common:kernel_aarch64",
+-        "//common:kernel_aarch64_gki_boot_image",
+-        "//common:kernel_aarch64_headers",
+-        "//private/devices/google/common:kernel_gki_modules",
+-    ] + select({
+-        "//private/devices/google/common:enable_download_fips140": ["@gki_prebuilt_fips140//fips140.ko"],
+-        "//private/devices/google/common:disable_download_fips140": [],
+-    }),
++    ],
+     dist_dir = "out/shusky/dist",
+     flat = True,
+     log = "info",
