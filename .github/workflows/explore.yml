@@ -223,6 +223,12 @@ jobs:
         with:
           limit-access-to-actor: true
 
+      - name: Upload Build Patch Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-patch
+          path: my_build_patch.patch
+
       #- name: Start VS Code Web IDE
         #uses: fawazahmed0/action-debug-vscode@main
         #with:
