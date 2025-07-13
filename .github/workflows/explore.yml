@@ -17,18 +17,18 @@ jobs:
       CCACHE_HARDLINK: "true"
 
     steps:
-      - name: Maximize Build Space
-        uses: AdityaGarg8/remove-unwanted-software@v5
-        with:
-          remove-dotnet: 'true'          # Frees ~2 GB
-          remove-android: 'true'         # Frees ~9 GB
-          remove-haskell: 'true'         # Frees ~5.2 GB
-          remove-codeql: 'true'          # Frees ~5.4 GB
-          remove-docker-images: 'true'   # Frees ~3.2 GB
-          remove-large-packages: 'true'  # Frees ~3.1 GB
-          remove-swapfile: 'true'        # Frees ~4 GB
-          remove-cached-tools: 'false'   # Avoid unless confirmed safe
-          verbose: 'true'                # Enable detailed logging
+#      - name: Maximize Build Space
+#        uses: AdityaGarg8/remove-unwanted-software@v5
+#        with:
+#          remove-dotnet: 'true'          # Frees ~2 GB
+#          remove-android: 'true'         # Frees ~9 GB
+#          remove-haskell: 'true'         # Frees ~5.2 GB
+#          remove-codeql: 'true'          # Frees ~5.4 GB
+#          remove-docker-images: 'true'   # Frees ~3.2 GB
+#          remove-large-packages: 'true'  # Frees ~3.1 GB
+#          remove-swapfile: 'true'        # Frees ~4 GB
+#          remove-cached-tools: 'false'   # Avoid unless confirmed safe
+#          verbose: 'true'                # Enable detailed logging
 
       - name: Install ccache
         run: sudo apt update && sudo apt install -y ccache
@@ -89,18 +89,17 @@ jobs:
         run: |
           set -e
           echo "Applying build system patch..."
-          
-          # Переменная путя к патчу.
-          PATCH_FILE="Patches/my_build_patch.patch"
+
+          cp .github/workflows/Patches/fix_BUILD.bazel.patch .
           
           # Проверяем, что файл существует
-          if [ ! -f "$PATCH_FILE" ]; then
+          if [ ! -f "./fix_BUILD.bazel.patch" ]; then
               echo "ERROR: Patch file not found at ${PATCH_FILE}!"
               exit 1
           fi
           
           # Применяем патч
-          patch -p1 --forward --fuzz=3 < "$PATCH_FILE"
+          patch -p1 --forward --fuzz=3 < fix_BUILD.bazel.patch
           
           echo "Build system patch applied successfully."
 
