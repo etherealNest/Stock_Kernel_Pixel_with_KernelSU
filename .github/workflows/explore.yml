@@ -218,6 +218,22 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
+      - name: Start VS Code Web IDE
+        uses: fawazahmed0/action-debug-vscode@main
+        with:
+          # Порт в раннере, на котором запустится веб‑IDE
+          port: 8080
+          # Корень проекта, который откроется в VS Code
+          folder: ${{ github.workspace }}
+          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print VS Code connection info
+        run: |
+          echo "🔗 VS Code Web IDE is ready!"
+          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
+          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
+
       - name: Setup SSH session for debugging
         uses: mxschmitt/action-tmate@v3
         with:
@@ -227,23 +243,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-patch
-          path: my_build_patch.patch
-
-      #- name: Start VS Code Web IDE
-        #uses: fawazahmed0/action-debug-vscode@main
-        #with:
-          # Порт в раннере, на котором запустится веб‑IDE
-          #port: 8080
-          # Корень проекта, который откроется в VS Code
-          #folder: ${{ github.workspace }}/kernel_source
-          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
-          #github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      #- name: Print VS Code connection info
-        #run: |
-          #echo "🔗 VS Code Web IDE is ready!"
-          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
-          #echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
+          path: |
+            my_build_patch.patch
+            BUILD.bazel
 
       #- name: Build Kernel from Patched Sources
         #working-directory: kernel_source
