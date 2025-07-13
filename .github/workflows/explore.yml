@@ -244,11 +244,11 @@ jobs:
 #              echo "ERROR: Patch file not found at ${PATCH_FILE}!"
 #              exit 1
 #          fi
-          
-          # Применяем патч
-          patch -p1 --forward --fuzz=3 < fix_BUILD.bazel.patch
-          
-          echo "Build system patch applied successfully."
+#          
+#         # Применяем патч
+#          patch -p1 --forward --fuzz=3 < fix_BUILD.bazel.patch
+#          
+#          echo "Build system patch applied successfully."
 
       - name: Build Kernel
         working-directory: kernel_source
