@@ -20,18 +20,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-#      - name: Maximize Build Space
-#        uses: AdityaGarg8/remove-unwanted-software@v5
-#        with:
-#          remove-dotnet: 'true'          # Frees ~2 GB
-#          remove-android: 'true'         # Frees ~9 GB
-#          remove-haskell: 'true'         # Frees ~5.2 GB
-#          remove-codeql: 'true'          # Frees ~5.4 GB
-#          remove-docker-images: 'true'   # Frees ~3.2 GB
-#          remove-large-packages: 'true'  # Frees ~3.1 GB
-#          remove-swapfile: 'true'        # Frees ~4 GB
-#          remove-cached-tools: 'false'   # Avoid unless confirmed safe
-#          verbose: 'true'                # Enable detailed logging
+      - name: Maximize Build Space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-dotnet: 'true'          # Frees ~2 GB
+          remove-android: 'true'         # Frees ~9 GB
+          remove-haskell: 'true'         # Frees ~5.2 GB
+          remove-codeql: 'true'          # Frees ~5.4 GB
+          remove-docker-images: 'true'   # Frees ~3.2 GB
+          remove-large-packages: 'true'  # Frees ~3.1 GB
+          remove-swapfile: 'true'        # Frees ~4 GB
+          remove-cached-tools: 'false'   # Avoid unless confirmed safe
+          verbose: 'true'                # Enable detailed logging
 
       - name: Install ccache
         run: sudo apt update && sudo apt install -y ccache
@@ -87,20 +87,6 @@ jobs:
           
           echo "Syncing kernel source..."
           repo sync -c -j$(nproc --all) --no-tags --fail-fast
-
-      - name: Start VS Code Web IDE
-        uses: fawazahmed0/action-debug-vscode@main
-        with:
-          port: 8080
-          folder: ${{ github.workspace }}
-          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Print VS Code connection info
-        run: |
-          echo "VS Code Web IDE is ready!"
-          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
-          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
 
       - name: Apply Build System Patch
         run: |
