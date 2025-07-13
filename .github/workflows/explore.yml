@@ -230,24 +230,25 @@ jobs:
       - name: Change Kernel Name and Version
         working-directory: kernel_source/aosp
         run: |
-          set -e # Выход при ошибке
+          set -e
 
-          # Устанавливаем суффикс версии
-          # Удаляем любую существующую строку CONFIG_LOCALVERSION и добавляем свою
+          # --- Устанавливаем КОРОТКИЙ суффикс версии НАДЕЖНЫМ способом ---
           sed -i '/CONFIG_LOCALVERSION/d' ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_LOCALVERSION=\"-NEXT-SUSFS-etherealKuchen\"" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_LOCALVERSION=\"-etherealKuchen\"" >> ./arch/arm64/configs/gki_defconfig # Используем короткое имя
           
-          # Устанавливаем статическую дату компиляции
-          # Для uname -v
-          perl -pi -e 's{UTS_VERSION="[^"]*"}{UTS_VERSION="#1 SMP PREEMPT Sun Apr 20 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
+          # --- ПОЛНОСТЬЮ ОТКЛЮЧАЕМ setlocalversion, чтобы он не добавлял хеш и -dirty ---
+          echo "#!/bin/bash" > ./scripts/setlocalversion
+          echo "echo \"\"" >> ./scripts/setlocalversion # Заставляем его выводить ПУСТУЮ СТРОКУ
+          chmod +x ./scripts/setlocalversion
           
-          # Для Bazel (на всякий случай, если где-то используется)
-          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Apr 20 04:20:00 UTC 2025"/' ./init/Makefile
+          # --- Устанавливаем статическую дату компиляции ---
+          perl -pi -e 's{UTS_VERSION="[^"]*"}{UTS_VERSION="#1 SMP PREEMPT Sun Jul 28 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
+          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Jul 28 04:20:00 UTC 2025"/' ./init/Makefile
 
-          # Убираем "-dirty" из версии, если оно появится
+          # --- Убираем "-dirty" из версии на уровне Bazel (дополнительная страховка) ---
           sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ../build/kernel/kleaf/impl/stamp.bzl
 
-          echo "Kernel version and timestamp successfully modified."
+          echo "Kernel version and timestamp modification complete."
 
 #      - name: Start VS Code Web IDE
 #        uses: fawazahmed0/action-debug-vscode@main
