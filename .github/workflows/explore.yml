@@ -218,19 +218,10 @@ jobs:
 #
 #          echo "Kernel version and timestamp modification complete."
 
-      - name: Start VS Code Web IDE
-        uses: fawazahmed0/action-debug-vscode@main
+      - name: Setup SSH session for debugging
+        uses: mxschmitt/action-tmate@v3
         with:
-          port: 8080
-          folder: ${{ github.workspace }}
-          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Print VS Code connection info
-        run: |
-          echo "VS Code Web IDE is ready!"
-          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
-          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
+          limit-access-to-actor: true
 
 #      - name: Apply Build System Patch
 #        run: |
