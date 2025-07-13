@@ -218,6 +218,37 @@ jobs:
 #
 #          echo "Kernel version and timestamp modification complete."
 
+      - name: Change Kernel Name and Version
+        working-directory: kernel_source/aosp
+        run: |
+          # Жестко задаем дату и время компиляции для воспроизводимости
+          # Обратите внимание, что mkcompile_h находится в aosp/scripts
+          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Apr 20 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
+          
+          # Упрощенное добавление суффикса
+          # Добавляем статичный суффикс к версии ядра
+          # KSU_VERSION здесь не определена, поэтому используем статичное имя
+          sed -i '$s|echo "\$res"|echo "\$res-NEXT-SUSFS-Wild"|' ./scripts/setlocalversion
+          
+          # Убираем суффикс "-dirty"
+          sed -i 's/-dirty//' ./scripts/setlocalversion
+          
+          # Модификация для Bazel-сборки (Kleaf)
+          # build-timestamp в init/Makefile
+          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Apr 20 04:20:00 UTC 2025"/' ./init/Makefile
+          
+          # Удаление проверки ABI и самих файлов. Пути адаптированы.
+          # Файл BUILD.bazel находится в корне kernel_source
+          sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./BUILD.bazel
+          rm -rf ./android/abi_gki_protected_exports_*
+          
+          # stamp.bzl находится в build/kernel/kleaf/impl/
+          # Путь отсчитывается от kernel_source, не от aosp
+          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ../build/kernel/kleaf/impl/stamp.bzl
+          
+          # Добавление суффикса в defconfig
+          sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
+
       - name: Setup SSH session for debugging
         uses: mxschmitt/action-tmate@v3
         with:
@@ -283,40 +314,36 @@ jobs:
           echo "Creating zip file $ZIP_NAME..."
           zip -r "../$ZIP_NAME" ./*
 
-# МНЕ НУЖНО РАЗОБРАТЬСЯ КАК В ИТОГОВЫЙ boot.img ДОБАВИТЬ RAMDISK.
-# ПОКА ПРОШИВКА ЭТИХ ОБРАЗОВ НЕ ДАСЬ ЗАГРУЗИТЬСЯ В СИСТЕМУ.
-#      - name: Set environment variables for Tools
-#        run: |
-#          # Пути указываются относительно корня GITHUB_WORKSPACE
-#          # avbtool и ключ подписи находятся в kernel_source/prebuilts/kernel-build-tools
-#          echo "AVBTOOL=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/bin/avbtool" >> $GITHUB_ENV
-#          echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
-#          
-#          # mkbootimg находится в kernel_source/tools/mkbootimg
-#          echo "MKBOOTIMG=$GITHUB_WORKSPACE/kernel_source/tools/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
-#
-#      - name: Build boot.img and vendor_kernel_boot.img
-#        # Работаем в директории, где лежат подготовленные файлы
-#        working-directory: FilesForImg 
-#        run: |          
-#          # Создание boot.img (содержит ядро)
-#          echo "Building boot.img..."
-#          $MKBOOTIMG --header_version 4 --kernel Image.lz4 --output boot.img
-#          
-#          # Подпись boot.img
-#          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
-#
-#          # Создание vendor_kernel_boot.img (содержит DTB)
-#          echo "Building vendor_kernel_boot.img..."
-#          # Ключевой параметр --dtb, который использует объединенный файл dtb
-#          $MKBOOTIMG --header_version 4 --dtb dtb --output vendor_kernel_boot.img
-#
-#          # Подпись vendor_kernel_boot.img
-#          $AVBTOOL add_hash_footer --partition_name vendor_kernel_boot --partition_size $((64 * 1024 * 1024)) --image vendor_kernel_boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
-#
-#          # Копируем готовые образы в корень проекта для загрузки артефактов
-#          cp boot.img ../boot_shusky_next.img
-#          cp vendor_kernel_boot.img ../vendor_kernel_boot_shusky_next.img
+      - name: Set environment variables for Tools
+        run: |
+          # Пути указываются относительно корня GITHUB_WORKSPACE
+          # avbtool и ключ подписи находятся в kernel_source/prebuilts/kernel-build-tools
+          echo "AVBTOOL=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/bin/avbtool" >> $GITHUB_ENV
+          echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
+          
+          # mkbootimg находится в kernel_source/tools/mkbootimg
+          echo "MKBOOTIMG=$GITHUB_WORKSPACE/kernel_source/tools/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
+      - name: Build boot.img and vendor_kernel_boot.img
+        # Работаем в директории, где лежат подготовленные файлы
+        working-directory: FilesForImg 
+        run: |
+          # Используем Image.lz4, так как он является стандартным для Pixel 8
+          
+          # === 1. Создание boot.img (содержит ядро) ===
+          echo "Building boot.img..."
+          $MKBOOTIMG --header_version 4 --kernel Image.lz4 --output boot.img
+          
+          # Подпись boot.img
+          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
+          # === 2. Создание vendor_kernel_boot.img (содержит DTB) ===
+          echo "Building vendor_kernel_boot.img..."
+          # Ключевой параметр --dtb, который использует объединенный файл dtb
+          $MKBOOTIMG --header_version 4 --dtb dtb --output vendor_kernel_boot.img
+          # Подпись vendor_kernel_boot.img
+          $AVBTOOL add_hash_footer --partition_name vendor_kernel_boot --partition_size $((64 * 1024 * 1024)) --image vendor_kernel_boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
+          # Копируем готовые образы в корень проекта для загрузки артефактов
+          cp boot.img ../boot_shusky_next.img
+          cp vendor_kernel_boot.img ../vendor_kernel_boot_shusky_next.img
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
