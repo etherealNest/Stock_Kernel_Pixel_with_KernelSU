@@ -85,6 +85,20 @@ jobs:
           echo "Syncing kernel source..."
           repo sync -c -j$(nproc --all) --no-tags --fail-fast
 
+      - name: Start VS Code Web IDE
+        uses: fawazahmed0/action-debug-vscode@main
+        with:
+          port: 8080
+          folder: ${{ github.workspace }}
+          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print VS Code connection info
+        run: |
+          echo "VS Code Web IDE is ready!"
+          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
+          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
+
       - name: Apply Build System Patch
         run: |
           set -e
