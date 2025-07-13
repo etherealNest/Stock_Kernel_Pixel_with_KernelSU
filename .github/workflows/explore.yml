@@ -213,28 +213,28 @@ jobs:
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./arch/arm64/configs/gki_defconfig
 
-      - name: Change Kernel Name and Version
-        working-directory: kernel_source/aosp
-        run: |
-          set -e
-
-          # --- Устанавливаем КОРОТКИЙ суффикс версии НАДЕЖНЫМ способом ---
-          sed -i '/CONFIG_LOCALVERSION/d' ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_LOCALVERSION=\"-etherealKuchen\"" >> ./arch/arm64/configs/gki_defconfig # Используем короткое имя
-          
-          # --- ПОЛНОСТЬЮ ОТКЛЮЧАЕМ setlocalversion, чтобы он не добавлял хеш и -dirty ---
-          echo "#!/bin/bash" > ./scripts/setlocalversion
-          echo "echo \"\"" >> ./scripts/setlocalversion # Заставляем его выводить ПУСТУЮ СТРОКУ
-          chmod +x ./scripts/setlocalversion
-          
-          # --- Устанавливаем статическую дату компиляции ---
-          perl -pi -e 's{UTS_VERSION="[^"]*"}{UTS_VERSION="#1 SMP PREEMPT Sun Jul 28 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
-          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Jul 28 04:20:00 UTC 2025"/' ./init/Makefile
-
-          # --- Убираем "-dirty" из версии на уровне Bazel (дополнительная страховка) ---
-          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ../build/kernel/kleaf/impl/stamp.bzl
-
-          echo "Kernel version and timestamp modification complete."
+#      - name: Change Kernel Name and Version
+#        working-directory: kernel_source/aosp
+#        run: |
+#          set -e
+#
+#          # --- Устанавливаем КОРОТКИЙ суффикс версии НАДЕЖНЫМ способом ---
+#          sed -i '/CONFIG_LOCALVERSION/d' ./arch/arm64/configs/gki_defconfig
+#          echo "CONFIG_LOCALVERSION=\"-etherealKuchen\"" >> ./arch/arm64/configs/gki_defconfig # Используем короткое имя
+#          
+#          # --- ПОЛНОСТЬЮ ОТКЛЮЧАЕМ setlocalversion, чтобы он не добавлял хеш и -dirty ---
+#          echo "#!/bin/bash" > ./scripts/setlocalversion
+#          echo "echo \"\"" >> ./scripts/setlocalversion # Заставляем его выводить ПУСТУЮ СТРОКУ
+#          chmod +x ./scripts/setlocalversion
+#          
+#          # --- Устанавливаем статическую дату компиляции ---
+#          perl -pi -e 's{UTS_VERSION="[^"]*"}{UTS_VERSION="#1 SMP PREEMPT Sun Jul 28 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
+#          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Jul 28 04:20:00 UTC 2025"/' ./init/Makefile
+#
+#          # --- Убираем "-dirty" из версии на уровне Bazel (дополнительная страховка) ---
+#          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ../build/kernel/kleaf/impl/stamp.bzl
+#
+#          echo "Kernel version and timestamp modification complete."
 
 #      - name: Start VS Code Web IDE
 #        uses: fawazahmed0/action-debug-vscode@main
