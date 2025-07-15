@@ -256,6 +256,12 @@ jobs:
           # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
           echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
 
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "BUILDbaszel"
+          path: |
+            BUILD.bazel
 #      - name: Setup SSH session for debugging
 #        uses: mxschmitt/action-tmate@v3
 #        with:
