@@ -129,6 +129,23 @@ jobs:
 
           cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_rules.c.patch ./
           patch -p1 --forward --fuzz=3 < fix_rules.c.patch
+
+          cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_sucompat.c.patch ./
+          patch -p1 --forward --fuzz=3 < fix_sucompat.c.patch
+
+      - name: Get KernelSU Version
+        working-directory: kernel_source/aosp/KernelSU-Next
+        run: |
+          echo "Getting KernelSU version..."
+          
+          # Базовая версия для подсчета
+          BASE_VERSION=10200
+          
+          # Считаем коммиты в текущей директории и добавляем к базовой версии
+          KSU_VERSION=$(expr $(git rev-list --count HEAD) + $BASE_VERSION)
+          
+          echo "Detected KSUVER: $KSU_VERSION"
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           
       - name: Apply Hooks Patches
         working-directory: kernel_source/aosp
@@ -195,34 +212,10 @@ jobs:
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./arch/arm64/configs/gki_defconfig
 
-#      - name: Change Kernel Name and Version
-#        working-directory: kernel_source/aosp
-#        run: |
-#          set -e
-#
-#          # --- Устанавливаем КОРОТКИЙ суффикс версии НАДЕЖНЫМ способом ---
-#          sed -i '/CONFIG_LOCALVERSION/d' ./arch/arm64/configs/gki_defconfig
-#          echo "CONFIG_LOCALVERSION=\"-etherealKuchen\"" >> ./arch/arm64/configs/gki_defconfig # Используем короткое имя
-#          
-#          # --- ПОЛНОСТЬЮ ОТКЛЮЧАЕМ setlocalversion, чтобы он не добавлял хеш и -dirty ---
-#          echo "#!/bin/bash" > ./scripts/setlocalversion
-#          echo "echo \"\"" >> ./scripts/setlocalversion # Заставляем его выводить ПУСТУЮ СТРОКУ
-#          chmod +x ./scripts/setlocalversion
-#          
-#          # --- Устанавливаем статическую дату компиляции ---
-#          perl -pi -e 's{UTS_VERSION="[^"]*"}{UTS_VERSION="#1 SMP PREEMPT Sun Jul 28 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
-#          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Jul 28 04:20:00 UTC 2025"/' ./init/Makefile
-#
-#          # --- Убираем "-dirty" из версии на уровне Bazel (дополнительная страховка) ---
-#          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ../build/kernel/kleaf/impl/stamp.bzl
-#
-#          echo "Kernel version and timestamp modification complete."
-
       - name: Change Kernel Name and Version
         working-directory: kernel_source/aosp
         run: |
           # Жестко задаем дату и время компиляции для воспроизводимости
-          # Обратите внимание, что mkcompile_h находится в aosp/scripts
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Apr 20 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
           
           # Упрощенное добавление суффикса
@@ -249,10 +242,30 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
-      - name: Setup SSH session for debugging
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: true
+      - name: Setup VS Code Remote Access
+        run: |
+          # Настройка SSH для VS Code
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Установка VS Code Server на удаленной машине
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            # Скачиваем VS Code Server если его нет
+            if [ ! -d ~/.vscode-server ]; then
+              curl -fsSL https://code.visualstudio.com/sha/download?build=stable&os=linux-x64 | tar -xz -C ~/
+            fi
+            
+            # Запускаем VS Code Server
+            ~/.vscode-server/bin/*/bin/code-server --host 0.0.0.0 --port 8080 --auth none &
+          EOF
+          
+          echo "VS Code Server доступен по адресу: http://${{ secrets.SSH_HOST }}:8080"
+
+#      - name: Setup SSH session for debugging
+#        uses: mxschmitt/action-tmate@v3
+#        with:
+#          limit-access-to-actor: true
 
 #      - name: Apply Build System Patch
 #        run: |
