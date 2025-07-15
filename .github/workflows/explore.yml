@@ -242,25 +242,19 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
-      - name: Setup VS Code Remote Access
+      - name: Start VS Code Web IDE
+        uses: fawazahmed0/action-debug-vscode@main
+        with:
+          port: 8080
+          folder: ${{ github.workspace }}
+          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print VS Code connection info
         run: |
-          # Настройка SSH для VS Code
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          
-          # Установка VS Code Server на удаленной машине
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            # Скачиваем VS Code Server если его нет
-            if [ ! -d ~/.vscode-server ]; then
-              curl -fsSL https://code.visualstudio.com/sha/download?build=stable&os=linux-x64 | tar -xz -C ~/
-            fi
-            
-            # Запускаем VS Code Server
-            ~/.vscode-server/bin/*/bin/code-server --host 0.0.0.0 --port 8080 --auth none &
-          EOF
-          
-          echo "VS Code Server доступен по адресу: http://${{ secrets.SSH_HOST }}:8080"
+          echo "VS Code Web IDE is ready!"
+          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
+          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
 
 #      - name: Setup SSH session for debugging
 #        uses: mxschmitt/action-tmate@v3
