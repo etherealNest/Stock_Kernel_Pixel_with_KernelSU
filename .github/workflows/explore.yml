@@ -130,8 +130,13 @@ jobs:
           cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_rules.c.patch ./
           patch -p1 --forward --fuzz=3 < fix_rules.c.patch
 
+          #Новый патч
           cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_sucompat.c.patch ./
           patch -p1 --forward --fuzz=3 < fix_sucompat.c.patch
+          
+          #Новый патч
+          cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.9/fix_kernel_compat.c.patch ./
+          patch -p1 --forward --fuzz=3 < fix_kernel_compat.c.patch
 
       - name: Get KernelSU Version
         working-directory: kernel_source/aosp/KernelSU-Next
@@ -212,6 +217,27 @@ jobs:
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./arch/arm64/configs/gki_defconfig
 
+      - name: Start VS Code Web IDE
+        uses: fawazahmed0/action-debug-vscode@main
+        with:
+          port: 8080
+          folder: ${{ github.workspace }}
+          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print VS Code connection info
+        run: |
+          echo "VS Code Web IDE is ready!"
+          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
+          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Art"
+          path: |
+            Art/*
+
       - name: Change Kernel Name and Version
         working-directory: kernel_source/aosp
         run: |
@@ -242,26 +268,6 @@ jobs:
           # Добавление суффикса в defconfig
           sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-SUSFS-Wild\"/" ./arch/arm64/configs/gki_defconfig
 
-      - name: Start VS Code Web IDE
-        uses: fawazahmed0/action-debug-vscode@main
-        with:
-          port: 8080
-          folder: ${{ github.workspace }}
-          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Print VS Code connection info
-        run: |
-          echo "VS Code Web IDE is ready!"
-          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
-          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: "BUILDbaszel"
-          path: |
-            BUILD.bazel
 #      - name: Setup SSH session for debugging
 #        uses: mxschmitt/action-tmate@v3
 #        with:
