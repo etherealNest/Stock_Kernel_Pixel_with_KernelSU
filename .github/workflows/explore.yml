@@ -88,6 +88,15 @@ jobs:
           echo "Syncing kernel source..."
           repo sync -c -j$(nproc --all) --no-tags --fail-fast
 
+      - name: Start VS Code Web IDE
+#        if: failure()      
+        uses: fawazahmed0/action-debug-vscode@main
+        with:
+          port: 8080
+          folder: ${{ github.workspace }}
+          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Apply Build System Patch
         run: |
           set -e
@@ -265,7 +274,7 @@ jobs:
           # Удаляем надпись dirty из наименования ядра.
           sed -i "s/echo -n -dirty/echo -n \"\"/g" build/kernel/kleaf/workspace_status_stamp.py
 
-          sed -i '$s|echo "\$res"|echo "\$res-NEXT-v${KSUVER-NUM}-SUSFS-v1.5.9"|' ./aosp/scripts/setlocalversion
+          sed -i '$s|echo "\$res"|echo "\$res-NEXT-v${KSUVER_NUM}-SUSFS-v1.5.9"|' ./aosp/scripts/setlocalversion
           sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Jul 19 15:00:00 UTC 2025"/' ./aosp/init/Makefile
 
       - name: Build Kernel
@@ -273,15 +282,6 @@ jobs:
         run: |
           # Запуск скрипта сборки ядра.
           ./build_shusky.sh --kernel_package=@//aosp
-
-      - name: Start VS Code Web IDE
-#        if: failure()      
-        uses: fawazahmed0/action-debug-vscode@main
-        with:
-          port: 8080
-          folder: ${{ github.workspace }}
-          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare Artifacts for Packaging
         run: |
