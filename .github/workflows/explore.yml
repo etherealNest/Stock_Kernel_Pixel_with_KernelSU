@@ -260,6 +260,14 @@ jobs:
       - name: Change Kernel Name
         working-directory: kernel_source
         run: |
+          echo "INFO: Staging all changes to prevent '-dirty' suffix..."
+          # Настраиваем Git
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # Добавляем ВСЕ измененные файлы (после патчей) в индекс Git.
+          # Это заставит `git status` считать рабочую директорию "чистой".
+          git add .
           # modify UTS_VERSION
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Jul 21 04:20:00 UTC 2025"}' ./aosp/scripts/mkcompile_h
 
