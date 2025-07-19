@@ -102,8 +102,8 @@ jobs:
 
           patch -p1 --forward --fuzz=3 -d "$TARGET_DIR" < "$PATCH_FILE"
 
-          sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./aosp/BUILD.bazel
-          rm -rf ./aosp/android/abi_gki_protected_exports_*
+          sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./kernel_source/aosp/BUILD.bazel
+          rm -rf ./kernel_source/aosp/android/abi_gki_protected_exports_*
 
           echo "Build system patch applied successfully."
 
