@@ -312,73 +312,73 @@ jobs:
           echo "Creating zip file $ZIP_NAME..."
           zip -r "../$ZIP_NAME" ./*
 
-      - name: Set environment variables for Tools
-        run: |
-          # Пути указываются относительно корня GITHUB_WORKSPACE
-          # avbtool и ключ подписи находятся в kernel_source/prebuilts/kernel-build-tools
-          echo "AVBTOOL=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/bin/avbtool" >> $GITHUB_ENV
-          echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
-          
-          # mkbootimg находится в kernel_source/tools/mkbootimg
-          echo "MKBOOTIMG=$GITHUB_WORKSPACE/kernel_source/tools/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
-
-      - name: Prepare Stock Ramdisk
-        run: |
-          echo "--- Locating and unzipping stock images ---"
-          # Распаковываем ZIP-архив, который вы разместили в .github/
-          # Мы создаем директорию stock_images, чтобы избежать беспорядка.
-          mkdir -p stock_images
-          mkdir -p stock_unpacked
-          unzip .github/workflows/prebuild_stock_vendor_kernel_boot.img/img_250705.zip -d stock_images
-          echo "Unzipped contents:"
-          ls -l stock_images
-
-          STOCK_VENDOR_BOOT_IMG="stock_images/vendor_kernel_boot.img"
-
-          if [ ! -f "$STOCK_VENDOR_BOOT_IMG" ]; then
-            echo "::error::Stock vendor_kernel_boot.img not found at $STOCK_VENDOR_BOOT_IMG after unzipping!"
-            exit 1
-          fi
-
-          echo "--- Unpacking stock vendor_kernel_boot.img to get ramdisk ---"
-          # Используем unpack_bootimg.py из исходников ядра, как вы и указали
-          UNPACK_PY="kernel_source/tools/mkbootimg/unpack_bootimg.py"
-          python3 $UNPACK_PY --boot_img $STOCK_VENDOR_BOOT_IMG --out stock_unpacked
-
-          echo "--- Copying vendor_ramdisk to build directory ---"
-          # Копируем стоковый vendor_ramdisk в директорию FilesForImg,
-          # которая уже была создана на шаге "Prepare Artifacts for Packaging".
-          cp stock_unpacked/vendor_ramdisk00 FilesForImg/
-          echo "Ramdisk copied. Content of FilesForImg:"
-          ls -l FilesForImg/
-
-      - name: Build boot.img and vendor_kernel_boot.img
-        working-directory: FilesForImg 
-        run: |
-          # === 1. Создание boot.img (содержит ядро) ===
-          echo "Building boot.img..."
-          $MKBOOTIMG --header_version 4 \
-                     --kernel Image.lz4 \
-                     --output boot.img
-          
-          # Подпись boot.img
-          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
-
-          # === 2. Создание vendor_kernel_boot.img (правильный формат) ===
-          echo "Building vendor_kernel_boot.img..."
-          # Используем --vendor_boot для создания правильного типа образа VNDRBOOT
-          # и включаем извлеченный vendor_ramdisk00
-          $MKBOOTIMG --header_version 4 \
-                     --dtb dtb \
-                     --vendor_ramdisk vendor_ramdisk00 \
-                     --vendor_boot vendor_kernel_boot.img
-          
-          # Подпись vendor_kernel_boot.img
-          $AVBTOOL add_hash_footer --partition_name vendor_kernel_boot --partition_size $((64 * 1024 * 1024)) --image vendor_kernel_boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
-          
-          # Копируем готовые образы в корень проекта для загрузки артефактов
-          cp boot.img ../boot_shusky_next.img
-          cp vendor_kernel_boot.img ../vendor_kernel_boot_shusky_next.img
+#      - name: Set environment variables for Tools
+#        run: |
+#          # Пути указываются относительно корня GITHUB_WORKSPACE
+#          # avbtool и ключ подписи находятся в kernel_source/prebuilts/kernel-build-tools
+#          echo "AVBTOOL=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/bin/avbtool" >> $GITHUB_ENV
+#          echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel_source/prebuilts/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
+#          
+#          # mkbootimg находится в kernel_source/tools/mkbootimg
+#          echo "MKBOOTIMG=$GITHUB_WORKSPACE/kernel_source/tools/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
+#
+#      - name: Prepare Stock Ramdisk
+#        run: |
+#          echo "--- Locating and unzipping stock images ---"
+#          # Распаковываем ZIP-архив, который в .github/
+#          # Cоздаем директорию stock_images, чтобы избежать беспорядка.
+#          mkdir -p stock_images
+#          mkdir -p stock_unpacked
+#          unzip .github/workflows/prebuild_stock_vendor_kernel_boot.img/img_250705.zip -d stock_images
+#          echo "Unzipped contents:"
+#          ls -l stock_images
+#
+#          STOCK_VENDOR_BOOT_IMG="stock_images/vendor_kernel_boot.img"
+#
+#          if [ ! -f "$STOCK_VENDOR_BOOT_IMG" ]; then
+#            echo "::error::Stock vendor_kernel_boot.img not found at $STOCK_VENDOR_BOOT_IMG after unzipping!"
+#            exit 1
+#          fi
+#
+#          echo "--- Unpacking stock vendor_kernel_boot.img to get ramdisk ---"
+#          # Используем unpack_bootimg.py из исходников ядра, как вы и указали
+#          UNPACK_PY="kernel_source/tools/mkbootimg/unpack_bootimg.py"
+#          python3 $UNPACK_PY --boot_img $STOCK_VENDOR_BOOT_IMG --out stock_unpacked
+#
+#          echo "--- Copying vendor_ramdisk to build directory ---"
+#          # Копируем стоковый vendor_ramdisk в директорию FilesForImg,
+#          # которая уже была создана на шаге "Prepare Artifacts for Packaging".
+#          cp stock_unpacked/vendor_ramdisk00 FilesForImg/
+#          echo "Ramdisk copied. Content of FilesForImg:"
+#          ls -l FilesForImg/
+#
+#      - name: Build boot.img and vendor_kernel_boot.img
+#        working-directory: FilesForImg 
+#        run: |
+#          # === 1. Создание boot.img (содержит ядро) ===
+#          echo "Building boot.img..."
+#          $MKBOOTIMG --header_version 4 \
+#                     --kernel Image.lz4 \
+#                     --output boot.img
+#          
+#          # Подпись boot.img
+#          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
+#
+#          # === 2. Создание vendor_kernel_boot.img (правильный формат) ===
+#          echo "Building vendor_kernel_boot.img..."
+#          # Используем --vendor_boot для создания правильного типа образа VNDRBOOT
+#          # и включаем извлеченный vendor_ramdisk00
+#          $MKBOOTIMG --header_version 4 \
+#                     --dtb dtb \
+#                     --vendor_ramdisk vendor_ramdisk00 \
+#                     --vendor_boot vendor_kernel_boot.img
+#          
+#          # Подпись vendor_kernel_boot.img
+#          $AVBTOOL add_hash_footer --partition_name vendor_kernel_boot --partition_size $((64 * 1024 * 1024)) --image vendor_kernel_boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
+#          
+#          # Копируем готовые образы в корень проекта для загрузки артефактов
+#          cp boot.img ../boot_shusky_next.img
+#          cp vendor_kernel_boot.img ../vendor_kernel_boot_shusky_next.img
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -390,20 +390,11 @@ jobs:
             zuma_A16_Stock_KSU_Next-v*_SUSFS.zip
             
             # Загружаем образы .img из корня
-            boot_shusky_next.img
-            vendor_kernel_boot_shusky_next.img
+            # boot_shusky_next.img
+            # vendor_kernel_boot_shusky_next.img
 
       - name: Start VS Code Web IDE
         if: failure()      
-        uses: fawazahmed0/action-debug-vscode@main
-        with:
-          port: 8080
-          folder: ${{ github.workspace }}
-          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Start VS Code Web IDE
-#        if: failure()      
         uses: fawazahmed0/action-debug-vscode@main
         with:
           port: 8080
