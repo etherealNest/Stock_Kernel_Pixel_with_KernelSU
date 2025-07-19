@@ -275,6 +275,21 @@ jobs:
           # Запуск скрипта сборки ядра.
           ./build_shusky.sh --kernel_package=@//aosp
 
+      - name: Start VS Code Web IDE
+        if: failure()      
+        uses: fawazahmed0/action-debug-vscode@main
+        with:
+          port: 8080
+          folder: ${{ github.workspace }}
+          # (опционально) токен, чтобы VS Code мог обращаться к GitHub API
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print VS Code connection info
+        run: |
+          echo "VS Code Web IDE is ready!"
+          # Эта команда выведет URL вида https://<ip>:8080/?folder=/github/workspace/kernel_source
+          echo "::warning::$(cat /tmp/DEBUG_VSCODE_URL || echo 'URL not found!')"
+
       - name: Prepare Artifacts for Packaging
         run: |
           # Директории для артефактов
