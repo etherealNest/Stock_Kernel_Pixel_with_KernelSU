@@ -1,7 +1,7 @@
-diff --git a/kernel_source/private/devices/google/shusky/BUILD.bazel b/kernel_source/private/devices/google/shusky/BUILD.bazel
-index a471088..4aa8364 100644
---- a/kernel_source/private/devices/google/shusky/BUILD.bazel
-+++ b/kernel_source/private/devices/google/shusky/BUILD.bazel
+diff --git a/BUILD.bazel b/BUILD.bazel
+index a471088..010436f 100644
+--- a/BUILD.bazel
++++ b/BUILD.bazel
 @@ -7,7 +7,7 @@ load(
      "kernel_build",
      "kernel_build_config",
@@ -11,10 +11,11 @@ index a471088..4aa8364 100644
      "kernel_module_group",
      "kernel_modules_install",
      "kernel_unstripped_modules_archive",
-@@ -69,22 +69,88 @@ kernel_build(
+@@ -69,22 +69,93 @@ kernel_build(
      srcs = [":kernel_sources"],
      outs = [
          ".config",
++        # Явно указываю, что должен получить эти артефакты
 +        "Image",
 +        "Image.lz4",
 +        "System.map",
@@ -23,6 +24,7 @@ index a471088..4aa8364 100644
          for dtb in ZUMA_DTBS + ZUMA_DPM_DTBOS
      ] + SHUSKY_DTBOS,
 -    base_kernel = "//common:kernel_aarch64",
++    # Явно заставляю систему собирать ядро из исходников.
 +    # base_kernel = "//common:kernel_aarch64",
      build_config = ":build_config",
      collect_unstripped_modules = True,
@@ -30,14 +32,17 @@ index a471088..4aa8364 100644
      dtstree = ":dtstree",
      kconfig_ext = ":kconfig_ext",
 -    kmi_symbol_list = "//common:android/abi_gki_aarch64_pixel",
++    # Отключаю проверку ABI, ОБЯЗАТЕЛЬНО
 +    # kmi_symbol_list = "//common:android/abi_gki_aarch64_pixel",
      make_goals = [
++        # Добавляю цели для сборки ядра.
 +        "all",
 +        "Image.lz4",
          "modules",
          "dtbs",
      ],
 -    module_outs = ZUMA_MODULE_OUTS,
++    # Явно указываю все модули, т.к. base_kernel их больше не предоставляет. *Если очистить этот список и просто запустить сборку, то сборка завершиться с ошибкой и будет выдан список модулей которые нужно добавить.
 +    module_outs = ZUMA_MODULE_OUTS + [
 +        "net/6lowpan/nhc_mobility.ko",
 +        "drivers/bluetooth/btbcm.ko",
@@ -103,59 +108,10 @@ index a471088..4aa8364 100644
      strip_modules = True,
  )
  
-@@ -132,102 +198,12 @@ merged_kernel_uapi_headers(
-     kernel_modules = [":kernel_ext_modules"],
+@@ -181,33 +252,35 @@ filegroup(
+     srcs = glob(["insmod_cfg/*.cfg"]),
  )
  
--create_file(
--    name = "vendor_ramdisk_modules_list",
--    srcs = [
--        # do not sort
--        "//private/devices/google/zuma:vendor_ramdisk_modules_list",
--        "vendor_ramdisk.modules.shusky",
--    ],
--    out = "vendor_ramdisk.modules",
--)
--
--create_file(
--    name = "system_dlkm_modules_list",
--    srcs = ["//private/devices/google/zuma:system_dlkm_modules_list"],
--    out = "system_dlkm.modules",
--)
--
--create_file(
--    name = "system_dlkm_props",
--    srcs = ["//private/devices/google/zuma:system_dlkm_props"],
--    out = "system_dlkm.props",
--)
--
--create_file(
--    name = "vendor_dlkm_modules_list",
--    srcs = ["//private/devices/google/zuma:vendor_dlkm_modules_list"],
--    out = "vendor_dlkm.modules",
--)
--
--create_file(
--    name = "vendor_dlkm_modules_blocklist",
--    srcs = [
--        # do not sort
--        "//private/devices/google/zuma:vendor_dlkm_modules_blocklist",
--        "vendor_dlkm.blocklist.shusky",
--    ],
--    out = "vendor_dlkm.blocklist",
--)
--
--create_file(
--    name = "vendor_dlkm_props",
--    srcs = ["//private/devices/google/zuma:vendor_dlkm_props"],
--    out = "vendor_dlkm.props",
--)
--
--filegroup(
--    name = "insmod_cfgs",
--    srcs = glob(["insmod_cfg/*.cfg"]),
--)
--
 -kernel_images(
 -    name = "kernel_images",
 -    base_kernel_images = "//common:kernel_aarch64_images",
@@ -183,34 +139,59 @@ index a471088..4aa8364 100644
 -    vendor_dlkm_props = ":vendor_dlkm_props",
 -    deps = ["//private/devices/google/common:sepolicy"],
 -)
--
++# Это правило больше не нужно, так как я не использую пред-собранные образы.
++# Его вызов приведет к ошибке, так как оно зависит от base_kernel.
++# kernel_images(
++#     name = "kernel_images",
++#     base_kernel_images = "//common:kernel_aarch64_images",
++#     # TODO: b/362627953 - Remove dtb.img
++#     boot_image_outs = [
++#         "dtb.img",
++#         "vendor_kernel_boot.img",
++#     ],
++#     build_dtbo = True,
++#     build_initramfs = True,
++#     build_system_dlkm = True,
++#     build_vendor_dlkm = True,
++#     build_vendor_kernel_boot = True,
++#     dtbo_srcs = [":kernel/" + dtbo for dtbo in SHUSKY_DTBOS],
++#     kernel_build = ":kernel",
++#     kernel_modules_install = ":kernel_modules_install",
++#     modules_list = ":vendor_ramdisk_modules_list",
++#     ramdisk_compression = "lz4",
++#     system_dlkm_modules_list = ":system_dlkm_modules_list",
++#     system_dlkm_props = ":system_dlkm_props",
++#     vendor_dlkm_archive = True,
++#     vendor_dlkm_etc_files = [":insmod_cfgs"],
++#     vendor_dlkm_modules_blocklist = ":vendor_dlkm_modules_blocklist",
++#     vendor_dlkm_modules_list = ":vendor_dlkm_modules_list",
++#     vendor_dlkm_props = ":vendor_dlkm_props",
++#     deps = ["//private/devices/google/common:sepolicy"],
++# )
+ 
  copy_to_dist_dir(
      name = "dist",
-     data = [
--        # keep sorted
--        ":insmod_cfgs",
+@@ -215,15 +288,17 @@ copy_to_dist_dir(
+         # keep sorted
+         ":insmod_cfgs",
          ":kernel",
 -        ":kernel_images",
++        # kernel_images больше не существует, убираем его из списка
++        # ":kernel_images",
          ":kernel_modules_install",
--        ":kernel_unstripped_modules_archive",
--        ":merged_kernel_uapi_headers",
+         ":kernel_unstripped_modules_archive",
+         ":merged_kernel_uapi_headers",
 -        "//common:android/abi_gki_aarch64_pixel",
 -        "//common:kernel_aarch64",
 -        "//common:kernel_aarch64_gki_boot_image",
 -        "//common:kernel_aarch64_headers",
 -        "//private/devices/google/common:kernel_gki_modules",
--    ] + select({
--        "//private/devices/google/common:enable_download_fips140": ["@gki_prebuilt_fips140//fips140.ko"],
--        "//private/devices/google/common:disable_download_fips140": [],
--    }),
-+    ],
-     dist_dir = "out/shusky/dist",
-     flat = True,
-     log = "info",
-@@ -256,4 +232,4 @@ alias(
- alias(
-     name = "zuma_shusky_abi_update_symbol_list",
-     actual = ":kernel_abi_update_symbol_list",
--)
-+)
-\ No newline at end of file
++        # Убираю копирование эталонного ABI, так как мы его не соблюдаем
++        # "//common:android/abi_gki_aarch64_pixel",
++        # "//common:kernel_aarch64",
++        # "//common:kernel_aarch64_gki_boot_image",
++        # "//common:kernel_aarch64_headers",
++        # "//private/devices/google/common:kernel_gki_modules",
+     ] + select({
+         "//private/devices/google/common:enable_download_fips140": ["@gki_prebuilt_fips140//fips140.ko"],
+         "//private/devices/google/common:disable_download_fips140": [],
