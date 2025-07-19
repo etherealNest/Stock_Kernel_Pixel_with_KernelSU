@@ -275,7 +275,7 @@ jobs:
           ./build_shusky.sh --kernel_package=@//aosp
 
       - name: Start VS Code Web IDE
-        if: failure()      
+#        if: failure()      
         uses: fawazahmed0/action-debug-vscode@main
         with:
           port: 8080
