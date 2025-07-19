@@ -259,16 +259,14 @@ jobs:
 
       - name: Change Kernel Name
         working-directory: kernel_source
-        run: |
+        env:
+          KSUVER_NUM: ${{ env.KSUVER }}
+        run: |         
+          # Удаляем надпись dirty из наименования ядра.
           sed -i "s/echo -n -dirty/echo -n \"\"/g" build/kernel/kleaf/workspace_status_stamp.py
-          
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Jul 21 04:20:00 UTC 2025"}' ./aosp/scripts/mkcompile_h
 
-          sed -i '$s|echo "\$res"|echo "\$res-NEXT-v$KSUVER-SUSFS-v1.5.9-Wild"|' ./aosp/scripts/setlocalversion
-          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Jul 21 04:20:00 UTC 2025"/' ./aosp/init/Makefile
-
-          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
-          sed -E -i "/^CONFIG_LOCALVERSION=/ s/(.*)\"/\\1-NEXT-v$KSUVER-SUSFS-nick\"/" ./aosp/arch/arm64/configs/gki_defconfig
+          sed -i '$s|echo "\$res"|echo "\$res-NEXT-v${KSUVER-NUM}-SUSFS-v1.5.9"|' ./aosp/scripts/setlocalversion
+          sed -i 's/build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))/build-timestamp = "Sun Jul 19 15:00:00 UTC 2025"/' ./aosp/init/Makefile
 
       - name: Build Kernel
         working-directory: kernel_source
@@ -315,9 +313,11 @@ jobs:
 
       - name: Create ZIP Files for Different Formats
         working-directory: AnyKernel3
+        env:
+          KSUVER_NUM: ${{ env.KSUVER }}
         run: |
           # Zip the files in the AnyKernel3 directory with a new naming convention
-          ZIP_NAME="zuma_A16_Stock_KSU_Next_SUSFS.zip"
+          ZIP_NAME="zuma_A16_Stock_KSU_Next-v${KSUVER_NUM}_SUSFS.zip"
           echo "Creating zip file $ZIP_NAME..."
           zip -r "../$ZIP_NAME" ./*
 
@@ -358,7 +358,7 @@ jobs:
           name: shusky-kernel-NEXT-SUSFS
           path: |
             # Загружаем ZIP-файл из корня
-            zuma_A16_Stock_KSU_Next_SUSFS.zip
+            zuma_A16_Stock_KSU_Next-v*_SUSFS.zip
             
             # Загружаем образы .img из корня
             boot_shusky_next.img
