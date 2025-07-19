@@ -95,7 +95,7 @@ jobs:
           PATCH_FILE=".github/workflows/Patches/fix_BUILD.bazel.patch"
           TARGET_DIR="kernel_source/private/devices/google/shusky"
           
-          if [ ! -f "./fix_BUILD.bazel.patch" ]; then
+          if [ ! -f "$PATCH_FILE" ]; then
               echo "ERROR: Patch file not found at ${PATCH_FILE}!"
               exit 1
           fi
